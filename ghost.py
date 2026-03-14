@@ -1,20 +1,37 @@
+import os
 import time
 import random
-import asyncio
+import logging
+from fastapi import FastAPI
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # -------------------------------
+# LOGGING
+# -------------------------------
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("ghost")
+
+# -------------------------------
 # TELEGRAM CONFIG
 # -------------------------------
 
-api_id = 33880517
-api_hash = "b9dde3f0fbc84c2802a92cc10c0655c6"
-session_str = "1BJWap1sBu4Z-MnPHehtkxoCFUZvyCNc6dj34cpZfLfxnmQVLxTLsDcN2Z6l631-WjBlpG-3wq4bZ492qTrcZvSMCY64p_KZISz7zwa2DkDpBX5Z85q2wymhdhHQJByyH55l9No3ezZ2rWjDaEfR5o_95fvshakyEFwna_Y36sKwF_r-Rg67i5CD5ginpRYJBAJx6pfvaehzsXUa_Yh7tS5YqKODeq8vup0YSs-L1FzxeC23O4UgUEgjwAWWGSiEvcCTJQ6MyzoI9j0YC6X4RsVjHrI0hq0luEWlcTxl8cvwHsrbe7wF5eQt0ohDktTnCsO3VgvnewHsmvKjP7HtgYvd8SApdT9Y="
-channel = "apexbinarysignalsvip"
+def require_env(name):
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+api_id = int(require_env("API_ID"))
+api_hash = require_env("API_HASH")
+session_str = require_env("TELEGRAM_SESSION")
+channel = require_env("CHANNEL_USERNAME")
 
 client = TelegramClient(StringSession(session_str), api_id, api_hash)
+scheduler = AsyncIOScheduler()
+app = FastAPI()
 
 # -------------------------------
 # CODE GENERATOR
@@ -48,38 +65,45 @@ def generate_compatible_promo(salt=3):
 async def send_signal():
     code = generate_compatible_promo()
 
-    message = f"""
-📈 TRADE SIGNAL
-
-Code: {code}
-Asset: EUR/USD
-Direction: CALL
-Expiry: 5 Minutes
-"""
-    await client.send_message(channel, message)
-    print("Signal sent:", code)
+    message = (
+        "TRADE SIGNAL\n\n"
+        f"Code: {code}\n"
+        "Asset: EUR/USD\n"
+        "Direction: CALL\n"
+        "Expiry: 5 Minutes"
+    )
+    try:
+        await client.send_message(channel, message)
+        logger.info("Signal sent: %s", code)
+    except Exception as exc:
+        logger.exception("Error sending signal: %s", exc)
 
 # -------------------------------
-# SCHEDULER
+# FASTAPI + SCHEDULER
 # -------------------------------
 
-async def run_scheduler():
+@app.on_event("startup")
+async def startup_event():
     await client.start()
-    scheduler = AsyncIOScheduler()
 
     # Example: send every day at 09:00
-    scheduler.add_job(send_signal, "cron", hour=9, minute=0)
+    scheduler.add_job(
+        send_signal,
+        "cron",
+        hour=9,
+        minute=0,
+        id="daily_signal",
+        replace_existing=True,
+    )
 
     scheduler.start()
-    print("Automation running...")
+    logger.info("Automation running...")
 
-    # Keep the client running
-    await client.run_until_disconnected()
+@app.on_event("shutdown")
+async def shutdown_event():
+    scheduler.shutdown(wait=False)
+    await client.disconnect()
 
-# -------------------------------
-# START
-# -------------------------------
-
-if __name__ == "__main__":
-    with client:
-        client.loop.run_until_complete(run_scheduler())
+@app.get("/health")
+async def health():
+    return {"status": "ok", "message": "Automation running"}
