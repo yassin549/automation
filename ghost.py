@@ -65,15 +65,17 @@ def generate_compatible_promo(salt=3):
 async def send_signal():
     code = generate_compatible_promo()
 
+    asset = "EUR/USD"
+    side = random.choice(["BUY", "SELL"])
+    duration = "5 min"
     message = (
-        "TRADE SIGNAL\n\n"
-        f"Code: {code}\n"
-        "Asset: EUR/USD\n"
-        "Direction: CALL\n"
-        "Expiry: 5 Minutes"
+        f"Asset: {asset}\n"
+        f"➡️ Direction: {side}\n"
+        f"⏱️ Duration: {duration}"
     )
     try:
         await client.send_message(channel, message)
+        await client.send_message(channel, code)
         logger.info("Signal sent: %s", code)
     except Exception as exc:
         logger.exception("Error sending signal: %s", exc)
