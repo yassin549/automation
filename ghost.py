@@ -88,13 +88,12 @@ async def send_signal():
 async def startup_event():
     await client.start()
 
-    # Example: send every day at 09:00
+    # Send every 2 hours
     scheduler.add_job(
         send_signal,
-        "cron",
-        hour=9,
-        minute=0,
-        id="daily_signal",
+        "interval",
+        hours=2,
+        id="two_hour_signal",
         replace_existing=True,
     )
 
