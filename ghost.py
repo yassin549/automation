@@ -32,6 +32,7 @@ channel = require_env("CHANNEL_USERNAME")
 client = TelegramClient(StringSession(session_str), api_id, api_hash)
 scheduler = AsyncIOScheduler()
 app = FastAPI()
+first_deploy_marker = ".first_deploy_sent"
 
 # -------------------------------
 # CODE GENERATOR
@@ -87,6 +88,16 @@ async def send_signal():
 @app.on_event("startup")
 async def startup_event():
     await client.start()
+
+    # Send a one-time test message on first deployment.
+    if not os.path.exists(first_deploy_marker):
+        try:
+            await client.send_message(channel, "test")
+            with open(first_deploy_marker, "w", encoding="utf-8") as handle:
+                handle.write("sent\n")
+            logger.info("First deploy test message sent.")
+        except Exception as exc:
+            logger.exception("Error sending first deploy test message: %s", exc)
 
     # Send every 2 hours
     scheduler.add_job(
