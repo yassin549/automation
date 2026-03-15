@@ -33,6 +33,7 @@ client = TelegramClient(StringSession(session_str), api_id, api_hash)
 app = FastAPI()
 first_deploy_marker = ".first_deploy_sent"
 signal_task = None
+signal_interval_seconds = int(os.getenv("SIGNAL_INTERVAL_SECONDS", str(2 * 60 * 60)))
 
 # -------------------------------
 # CODE GENERATOR
@@ -62,6 +63,12 @@ def generate_compatible_promo(salt=3):
 # -------------------------------
 # SEND TELEGRAM SIGNAL
 # -------------------------------
+
+async def ensure_client_ready():
+    if not client.is_connected():
+        await client.connect()
+    if not await client.is_user_authorized():
+        raise RuntimeError("Telegram client not authorized. Check TELEGRAM_SESSION.")
 
 async def send_signal():
     code = generate_compatible_promo()
@@ -99,11 +106,17 @@ async def startup_event():
         except Exception as exc:
             logger.exception("Error sending first deploy test message: %s", exc)
 
-    # Send immediately, then every 2 hours in a loop.
+    # Send immediately, then every interval in a loop.
     async def signal_loop():
         while True:
-            await send_signal()
-            await asyncio.sleep(2 * 60 * 60)
+            try:
+                await ensure_client_ready()
+                await send_signal()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.exception("Signal loop error: %s", exc)
+            await asyncio.sleep(signal_interval_seconds)
 
     global signal_task
     signal_task = asyncio.create_task(signal_loop())
