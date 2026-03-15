@@ -3,6 +3,7 @@ import time
 import random
 import logging
 import asyncio
+from datetime import datetime, timedelta
 from fastapi import FastAPI
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -34,6 +35,9 @@ app = FastAPI()
 first_deploy_marker = ".first_deploy_sent"
 signal_task = None
 signal_interval_seconds = int(os.getenv("SIGNAL_INTERVAL_SECONDS", str(2 * 60 * 60)))
+progress_update_seconds = int(os.getenv("PROGRESS_UPDATE_SECONDS", "60"))
+if progress_update_seconds < 10:
+    progress_update_seconds = 10
 
 # -------------------------------
 # CODE GENERATOR
@@ -69,6 +73,53 @@ async def ensure_client_ready():
         await client.connect()
     if not await client.is_user_authorized():
         raise RuntimeError("Telegram client not authorized. Check TELEGRAM_SESSION.")
+
+def format_duration(seconds):
+    if seconds < 0:
+        seconds = 0
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+def format_progress_bar(remaining_seconds, total_seconds, width=20):
+    if total_seconds <= 0:
+        return "[--------------------] 0%"
+    done = total_seconds - remaining_seconds
+    ratio = max(0.0, min(1.0, done / total_seconds))
+    filled = int(ratio * width)
+    bar = "#" * filled + "-" * (width - filled)
+    percent = int(ratio * 100)
+    return f"[{bar}] {percent}%"
+
+def build_countdown_message(remaining_seconds, total_seconds):
+    bar = format_progress_bar(remaining_seconds, total_seconds)
+    remaining_text = format_duration(remaining_seconds)
+    return f"Next signal in {remaining_text}\n{bar}"
+
+async def countdown_to_next_signal(total_seconds):
+    remaining = total_seconds
+    await ensure_client_ready()
+    progress_message = await client.send_message(
+        channel,
+        build_countdown_message(remaining, total_seconds),
+    )
+    try:
+        while remaining > 0:
+            sleep_for = min(progress_update_seconds, remaining)
+            await asyncio.sleep(sleep_for)
+            remaining -= sleep_for
+            await ensure_client_ready()
+            await client.edit_message(
+                channel,
+                progress_message.id,
+                build_countdown_message(remaining, total_seconds),
+            )
+    finally:
+        try:
+            await client.delete_messages(channel, progress_message.id)
+        except Exception as exc:
+            logger.exception("Failed to delete progress message: %s", exc)
 
 async def send_signal():
     code = generate_compatible_promo()
@@ -116,7 +167,7 @@ async def startup_event():
                 raise
             except Exception as exc:
                 logger.exception("Signal loop error: %s", exc)
-            await asyncio.sleep(signal_interval_seconds)
+            await countdown_to_next_signal(signal_interval_seconds)
 
     global signal_task
     signal_task = asyncio.create_task(signal_loop())
