@@ -36,8 +36,8 @@ first_deploy_marker = ".first_deploy_sent"
 signal_task = None
 signal_interval_seconds = int(os.getenv("SIGNAL_INTERVAL_SECONDS", str(2 * 60 * 60)))
 progress_update_seconds = int(os.getenv("PROGRESS_UPDATE_SECONDS", "60"))
-if progress_update_seconds < 10:
-    progress_update_seconds = 10
+if progress_update_seconds < 1:
+    progress_update_seconds = 1
 
 # -------------------------------
 # CODE GENERATOR
