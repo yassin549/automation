@@ -36,8 +36,8 @@ first_deploy_marker = ".first_deploy_sent"
 signal_task = None
 signal_interval_seconds = int(os.getenv("SIGNAL_INTERVAL_SECONDS", str(2 * 60 * 60)))
 progress_update_seconds = int(os.getenv("PROGRESS_UPDATE_SECONDS", "60"))
-if progress_update_seconds < 1:
-    progress_update_seconds = 1
+if progress_update_seconds < 60:
+    progress_update_seconds = 60
 
 # -------------------------------
 # CODE GENERATOR
@@ -79,8 +79,7 @@ def format_duration(seconds):
         seconds = 0
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
-    secs = seconds % 60
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{hours:02d}:{minutes:02d}"
 
 def format_progress_bar(remaining_seconds, total_seconds, width=20):
     if total_seconds <= 0:
@@ -146,6 +145,11 @@ async def send_signal():
 @app.on_event("startup")
 async def startup_event():
     await client.start()
+    logger.info(
+        "Signal interval: %ss | Progress update: %ss",
+        signal_interval_seconds,
+        progress_update_seconds,
+    )
 
     # Send a one-time test message on first deployment.
     if not os.path.exists(first_deploy_marker):
