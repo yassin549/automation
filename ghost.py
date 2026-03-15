@@ -2,10 +2,10 @@ import os
 import time
 import random
 import logging
+import asyncio
 from fastapi import FastAPI
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # -------------------------------
 # LOGGING
@@ -30,9 +30,9 @@ session_str = require_env("TELEGRAM_SESSION")
 channel = require_env("CHANNEL_USERNAME")
 
 client = TelegramClient(StringSession(session_str), api_id, api_hash)
-scheduler = AsyncIOScheduler()
 app = FastAPI()
 first_deploy_marker = ".first_deploy_sent"
+signal_task = None
 
 # -------------------------------
 # CODE GENERATOR
@@ -99,21 +99,25 @@ async def startup_event():
         except Exception as exc:
             logger.exception("Error sending first deploy test message: %s", exc)
 
-    # Send every 2 hours
-    scheduler.add_job(
-        send_signal,
-        "interval",
-        hours=2,
-        id="two_hour_signal",
-        replace_existing=True,
-    )
+    # Send immediately, then every 2 hours in a loop.
+    async def signal_loop():
+        while True:
+            await send_signal()
+            await asyncio.sleep(2 * 60 * 60)
 
-    scheduler.start()
+    global signal_task
+    signal_task = asyncio.create_task(signal_loop())
     logger.info("Automation running...")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    scheduler.shutdown(wait=False)
+    global signal_task
+    if signal_task:
+        signal_task.cancel()
+        try:
+            await signal_task
+        except asyncio.CancelledError:
+            pass
     await client.disconnect()
 
 @app.get("/health")
