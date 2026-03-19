@@ -1,14 +1,17 @@
+import argparse
 import os
 import time
 import random
 import logging
 import asyncio
+from pathlib import Path
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("ghost")
+DEFAULT_INTERVAL_HOURS = 24.0
 
 
 def require_env(name: str) -> str:
@@ -36,37 +39,116 @@ def generate_compatible_promo(salt: int = 3) -> str:
     return "0x" + "".join(addr)
 
 
-async def send_signal() -> None:
+FIRST_MESSAGE = (
+    "⚠️ Only serious traders\n\n"
+    "Next session starting in 10 minutes\n\n"
+    "If you're not registered, you will miss signals\n\n"
+    " https://optitrade.site/?ref=APEX"
+)
+
+SECOND_MESSAGE = (
+    " New Trading Session Starting\n\n"
+    "To follow signals correctly:\n\n"
+    "1. Register here  https://optitrade.site/?ref=APEX\n"
+    "2. Deposit minimum $50\n"
+    "3. Use same expiry & entry\n\n"
+    "⚠️ Signals only work properly on our platform"
+)
+
+
+def build_third_message(direction: str) -> str:
+    return (
+        " EUR/USD (OTC)\n"
+        "⏱️ Expiry: 1 min\n"
+        f" Direction: {direction}\n\n"
+        "⚡️ Entry: NOW"
+    )
+
+
+def pick_proof_image(proof_dir: Path) -> Path | None:
+    if not proof_dir.exists():
+        return None
+
+    allowed = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+    files = [
+        path
+        for path in proof_dir.iterdir()
+        if path.is_file() and path.suffix.lower() in allowed
+    ]
+    if not files:
+        return None
+    return random.choice(files)
+
+
+async def send_signal(interval_hours: float | None = DEFAULT_INTERVAL_HOURS) -> None:
     api_id = int(require_env("API_ID"))
     api_hash = require_env("API_HASH")
     session_str = require_env("TELEGRAM_SESSION")
     channel = require_env("CHANNEL_USERNAME")
 
     client = TelegramClient(StringSession(session_str), api_id, api_hash)
-    try:
-        await client.connect()
-        if not await client.is_user_authorized():
-            raise RuntimeError("Telegram client not authorized. Check TELEGRAM_SESSION.")
+    proof_dir = Path(__file__).resolve().parent / "proof"
+    loop = asyncio.get_running_loop()
 
-        code = generate_compatible_promo()
+    while True:
+        cycle_start = loop.time()
+        try:
+            await client.connect()
+            if not await client.is_user_authorized():
+                raise RuntimeError("Telegram client not authorized. Check TELEGRAM_SESSION.")
 
-        asset = "EUR/USD"
-        side = random.choice(["BUY", "SELL"])
-        duration = "5 min"
+            code = generate_compatible_promo()
+            direction = random.choice(["CALL⬆️", "PUT⬇️"])
+            third_message = build_third_message(direction)
 
-        message = (
-            f"Asset: {asset}\n"
-            f"Direction: {side}\n"
-            f"Duration: {duration}"
-        )
+            await client.send_message(channel, FIRST_MESSAGE)
+            await client.send_message(channel, SECOND_MESSAGE)
+            await client.send_message(channel, third_message)
+            await client.send_message(channel, code)
+            logger.info("Signal sent with direction %s and code %s", direction, code)
 
-        await client.send_message(channel, message)
-        await client.send_message(channel, code)
-        logger.info("Signal sent: %s", code)
-    finally:
-        if client.is_connected():
-            await client.disconnect()
+            await asyncio.sleep(60)
+
+            await client.send_message(channel, "WIN ✅")
+            proof_image = pick_proof_image(proof_dir)
+            if proof_image:
+                await client.send_file(channel, str(proof_image))
+                logger.info("Proof image sent: %s", proof_image.name)
+            else:
+                logger.warning("No proof images found in %s", proof_dir)
+        except Exception:
+            logger.exception("Signal cycle failed")
+        finally:
+            if client.is_connected():
+                await client.disconnect()
+
+        if interval_hours is None:
+            break
+
+        elapsed = loop.time() - cycle_start
+        sleep_for = max(0, interval_hours * 60 * 60 - elapsed)
+        logger.info("Next cycle in %.0f seconds", sleep_for)
+        await asyncio.sleep(sleep_for)
 
 
 if __name__ == "__main__":
-    asyncio.run(send_signal())
+    parser = argparse.ArgumentParser(description="Send Telegram trading signals.")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--once", action="store_true", help="Run a single cycle and exit.")
+    group.add_argument(
+        "--interval-hours",
+        type=float,
+        help=f"Hours between cycles when running continuously (default: {DEFAULT_INTERVAL_HOURS}).",
+    )
+    args = parser.parse_args()
+
+    if args.once:
+        interval = None
+    elif args.interval_hours is not None:
+        if args.interval_hours <= 0:
+            parser.error("--interval-hours must be greater than 0.")
+        interval = args.interval_hours
+    else:
+        interval = DEFAULT_INTERVAL_HOURS
+
+    asyncio.run(send_signal(interval))

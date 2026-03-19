@@ -2,7 +2,7 @@ name: Telegram Signals
 
 on:
   schedule:
-    - cron: "0 */2 * * *"
+    - cron: "0 */8 * * *"
   workflow_dispatch:
 
 jobs:
@@ -24,4 +24,4 @@ jobs:
           API_HASH: ${{ secrets.API_HASH }}
           TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
           CHANNEL_USERNAME: ${{ secrets.CHANNEL_USERNAME }}
-        run: python send_signal.py
+        run: python send_signal.py --once
