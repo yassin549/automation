@@ -2,10 +2,7 @@ name: Telegram Signals
 
 on:
   schedule:
-    - cron: "0 12 * * *"
-    - cron: "0 14 * * *"
-    - cron: "0 19 * * *"
-  workflow_dispatch:
+    - cron: "0 12,14,19 * * *"
 
 concurrency:
   group: telegram-signals
@@ -13,6 +10,7 @@ concurrency:
 
 jobs:
   run:
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     env:
       PYTHONUNBUFFERED: "1"
