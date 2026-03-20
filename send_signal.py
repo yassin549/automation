@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import argparse
 import os
 import time
@@ -43,28 +44,28 @@ def generate_compatible_promo(salt: int = 3) -> str:
 
 
 FIRST_MESSAGE = (
-    "???? Only serious traders\n\n"
-    "? Next session starting in 10 minutes\n\n"
-    "? If you're not registered, you will miss signals\n\n"
-    "?? https://optitrade.site/?ref=APEX"
+    "🚨 Only serious traders\n\n"
+    "⏳ Next session starting in 10 minutes\n\n"
+    "⚠️ If you're not registered, you will miss signals\n\n"
+    "👉 https://optitrade.site/?ref=APEX"
 )
 
 SECOND_MESSAGE = (
-    "?? New Trading Session Starting\n\n"
-    "? To follow signals correctly:\n\n"
-    "1. ?? Register here https://optitrade.site/?ref=APEX\n"
-    "2. ?? Deposit minimum $50\n"
-    "3. ?? Use same expiry & entry\n\n"
-    "?? Signals only work properly on our platform"
+    "🚀 New Trading Session Starting\n\n"
+    "✅ To follow signals correctly:\n\n"
+    "1. 📝 Register here https://optitrade.site/?ref=APEX\n"
+    "2. 💵 Deposit minimum $50\n"
+    "3. 🎯 Use same expiry & entry\n\n"
+    "⚠️ Signals only work properly on our platform"
 )
 
 
 def build_third_message(direction: str) -> str:
     return (
-        "?? EUR/USD (OTC)\n"
-        "?? Expiry: 1 min\n"
-        f"?? Direction: {direction}\n\n"
-        "? Entry: NOW"
+        "📊 EUR/USD (OTC)\n"
+        "⏱️ Expiry: 1 min\n"
+        f"🎯 Direction: {direction}\n\n"
+        "🚨 Entry: NOW"
     )
 
 
@@ -101,7 +102,7 @@ async def send_signal(interval_hours: float | None = DEFAULT_INTERVAL_HOURS) -> 
                 raise RuntimeError("Telegram client not authorized. Check TELEGRAM_SESSION.")
 
             code = generate_compatible_promo()
-            direction = random.choice(["CALL ??", "PUT ??"])
+            direction = random.choice(["CALL 📈", "PUT 📉"])
             third_message = build_third_message(direction)
 
             await client.send_message(channel, FIRST_MESSAGE)
@@ -112,7 +113,7 @@ async def send_signal(interval_hours: float | None = DEFAULT_INTERVAL_HOURS) -> 
 
             await asyncio.sleep(60)
 
-            await client.send_message(channel, "WIN \u2705")
+            await client.send_message(channel, "WIN ✅")
             proof_image = pick_proof_image(proof_dir)
             if proof_image:
                 await client.send_file(channel, str(proof_image))
