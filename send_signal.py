@@ -16,6 +16,9 @@ DEFAULT_INTERVAL_HOURS = 8.0
 
 def require_env(name: str) -> str:
     value = os.getenv(name)
+    if value is None:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    value = value.strip()
     if not value:
         raise RuntimeError(f"Missing required environment variable: {name}")
     return value
@@ -40,45 +43,27 @@ def generate_compatible_promo(salt: int = 3) -> str:
 
 
 FIRST_MESSAGE = (
-    "???? Only serious traders
-
-"
-    "? Next session starting in 10 minutes
-
-"
-    "? If you're not registered, you will miss signals
-
-"
+    "???? Only serious traders\n\n"
+    "? Next session starting in 10 minutes\n\n"
+    "? If you're not registered, you will miss signals\n\n"
     "?? https://optitrade.site/?ref=APEX"
 )
 
 SECOND_MESSAGE = (
-    "?? New Trading Session Starting
-
-"
-    "? To follow signals correctly:
-
-"
-    "1. ?? Register here  https://optitrade.site/?ref=APEX
-"
-    "2. ?? Deposit minimum $50
-"
-    "3. ?? Use same expiry & entry
-
-"
+    "?? New Trading Session Starting\n\n"
+    "? To follow signals correctly:\n\n"
+    "1. ?? Register here https://optitrade.site/?ref=APEX\n"
+    "2. ?? Deposit minimum $50\n"
+    "3. ?? Use same expiry & entry\n\n"
     "?? Signals only work properly on our platform"
 )
 
 
 def build_third_message(direction: str) -> str:
     return (
-        "?? EUR/USD (OTC)
-"
-        "?? Expiry: 1 min
-"
-        f"?? Direction: {direction}
-
-"
+        "?? EUR/USD (OTC)\n"
+        "?? Expiry: 1 min\n"
+        f"?? Direction: {direction}\n\n"
         "? Entry: NOW"
     )
 
@@ -127,7 +112,7 @@ async def send_signal(interval_hours: float | None = DEFAULT_INTERVAL_HOURS) -> 
 
             await asyncio.sleep(60)
 
-            await client.send_message(channel, "WIN ✅")
+            await client.send_message(channel, "WIN \u2705")
             proof_image = pick_proof_image(proof_dir)
             if proof_image:
                 await client.send_file(channel, str(proof_image))
