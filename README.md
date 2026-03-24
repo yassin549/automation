@@ -10,8 +10,11 @@ Telegram signal scheduler that enforces the daily structure and rules you specif
 Required:
 - `API_ID`: Telegram API ID (integer)
 - `API_HASH`: Telegram API hash
-- `TELEGRAM_SESSION`: Telethon StringSession (this is not a bot token)
 - `CHANNEL_USERNAME`: Free channel username or ID (for example `@mychannel`)
+
+Authentication (choose one):
+- `TELEGRAM_SESSION`: Telethon StringSession for a user account (recommended)
+- `TELEGRAM_BOT_TOKEN`: Telegram bot token (bot must be added to channels)
 
 Optional:
 - `VIP_CHANNEL_USERNAME`: VIP channel username/ID or an invite link (for example `https://t.me/+T3eNT7Ph6J5kNGJk`). If you use an invite link, the account in `TELEGRAM_SESSION` must have permission to join.

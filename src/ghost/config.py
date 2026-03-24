@@ -10,7 +10,8 @@ import os
 class AppConfig:
     api_id: int
     api_hash: str
-    session: str
+    session: str | None
+    bot_token: str | None
     channel: str
     vip_channel: str | None
     plan_path: Path
@@ -51,6 +52,15 @@ def optional_env(name: str) -> str | None:
     return value or None
 
 
+def _looks_like_bot_token(value: str) -> bool:
+    left, sep, right = value.partition(":")
+    if not sep:
+        return False
+    if not left.isdigit():
+        return False
+    return len(right) >= 10
+
+
 def load_config(
     plan_path: Path,
     state_path: Path,
@@ -78,12 +88,23 @@ def load_config(
     except ValueError as exc:
         raise RuntimeError("API_ID must be an integer.") from exc
 
+    session = optional_env("TELEGRAM_SESSION")
+    bot_token = optional_env("TELEGRAM_BOT_TOKEN") or optional_env("BOT_TOKEN")
+    if bot_token is None and session and _looks_like_bot_token(session):
+        bot_token = session
+        session = None
+    if session is None and bot_token is None:
+        raise RuntimeError(
+            "Missing required environment variable: TELEGRAM_SESSION or TELEGRAM_BOT_TOKEN"
+        )
+
     resolved_vip = vip_channel or optional_env("VIP_CHANNEL_USERNAME")
 
     return AppConfig(
         api_id=api_id,
         api_hash=require_env("API_HASH"),
-        session=require_env("TELEGRAM_SESSION"),
+        session=session,
+        bot_token=bot_token,
         channel=require_env("CHANNEL_USERNAME"),
         vip_channel=resolved_vip,
         plan_path=plan_path,

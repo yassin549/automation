@@ -19,6 +19,7 @@ from .messages import (
     RULES_MESSAGE,
     ProfitExample,
     RecapStats,
+    build_code_message,
     build_daily_recap_message,
     build_free_delayed_message,
     build_result_message,
@@ -46,14 +47,25 @@ async def run_sender(
     mode: str,
 ) -> None:
     tz = ZoneInfo(config.timezone)
-    client = TelegramClient(StringSession(config.session), config.api_id, config.api_hash)
+    client = TelegramClient(StringSession(config.session or ""), config.api_id, config.api_hash)
 
     await client.connect()
     try:
+        if config.bot_token:
+            if config.session:
+                if not await client.is_user_authorized():
+                    logger.warning(
+                        "Session not authorized; attempting bot token authentication."
+                    )
+                    await client.start(bot_token=config.bot_token)
+            else:
+                logger.info("Using bot token authentication.")
+                await client.start(bot_token=config.bot_token)
+
         if not await client.is_user_authorized():
             raise RuntimeError(
-                "Telegram client not authorized. TELEGRAM_SESSION must be an authorized "
-                "Telethon StringSession."
+                "Telegram client not authorized. Provide TELEGRAM_SESSION (authorized "
+                "StringSession) or TELEGRAM_BOT_TOKEN."
             )
 
         vip_target = None
@@ -201,7 +213,12 @@ async def _run_session(
 
             vip_code_id = f"{signal_key}:vip-code"
             if not state.was_executed(vip_code_id):
-                await _send_message(client, vip_target, code)
+                await _send_message(
+                    client,
+                    vip_target,
+                    build_code_message(code, vip=True),
+                    logger=logger,
+                )
                 state.mark_executed(vip_code_id)
                 save_state(config.state_path, state)
 
@@ -214,7 +231,12 @@ async def _run_session(
 
             free_code_id = f"{signal_key}:free-code"
             if not state.was_executed(free_code_id):
-                await _send_message(client, config.channel, code)
+                await _send_message(
+                    client,
+                    config.channel,
+                    build_code_message(code, vip=False),
+                    logger=logger,
+                )
                 state.mark_executed(free_code_id)
                 save_state(config.state_path, state)
 
@@ -230,7 +252,12 @@ async def _run_session(
 
             free_code_id = f"{signal_key}:free-code"
             if not state.was_executed(free_code_id):
-                await _send_message(client, config.channel, code)
+                await _send_message(
+                    client,
+                    config.channel,
+                    build_code_message(code, vip=False),
+                    logger=logger,
+                )
                 state.mark_executed(free_code_id)
                 save_state(config.state_path, state)
 
