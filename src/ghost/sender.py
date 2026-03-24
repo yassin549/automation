@@ -48,9 +48,13 @@ async def run_sender(
     tz = ZoneInfo(config.timezone)
     client = TelegramClient(StringSession(config.session), config.api_id, config.api_hash)
 
-    async with client:
+    await client.connect()
+    try:
         if not await client.is_user_authorized():
-            raise RuntimeError("Telegram client not authorized. Check TELEGRAM_SESSION.")
+            raise RuntimeError(
+                "Telegram client not authorized. TELEGRAM_SESSION must be an authorized "
+                "Telethon StringSession."
+            )
 
         vip_target = None
         if config.vip_channel and mode in {"day", "morning", "evening"}:
@@ -90,10 +94,17 @@ async def run_sender(
                     now.date() + timedelta(days=1), time(0, 0), tzinfo=tz
                 )
                 sleep_for = max(0, (next_day - now).total_seconds())
-                logger.info("Day complete. Sleeping %.0f seconds until %s.", sleep_for, next_day)
+                logger.info(
+                    "Day complete. Sleeping %.0f seconds until %s.",
+                    sleep_for,
+                    next_day,
+                )
                 await asyncio.sleep(sleep_for)
         else:
             await _run_mode_once(client, config, logger, tz, vip_target, mode)
+    finally:
+        if client.is_connected():
+            await client.disconnect()
 
 
 async def _run_day(
