@@ -217,7 +217,6 @@ async def _run_session(
                     client,
                     vip_target,
                     build_code_message(code, vip=True),
-                    logger=logger,
                 )
                 state.mark_executed(vip_code_id)
                 save_state(config.state_path, state)
@@ -235,7 +234,6 @@ async def _run_session(
                     client,
                     config.channel,
                     build_code_message(code, vip=False),
-                    logger=logger,
                 )
                 state.mark_executed(free_code_id)
                 save_state(config.state_path, state)
@@ -256,7 +254,6 @@ async def _run_session(
                     client,
                     config.channel,
                     build_code_message(code, vip=False),
-                    logger=logger,
                 )
                 state.mark_executed(free_code_id)
                 save_state(config.state_path, state)
