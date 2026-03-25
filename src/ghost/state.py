@@ -28,6 +28,7 @@ class BotState:
     executed: set[str] = field(default_factory=set)
     daily: Stats = field(default_factory=Stats)
     weekly: Stats = field(default_factory=Stats)
+    session_stats: dict[str, Stats] = field(default_factory=dict)
     win_streak: int = 0
     vip_push_posted_for_streak: bool = False
     conversion_posted: bool = False
@@ -75,6 +76,7 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         executed=set(data.get("executed", [])),
         daily=_load_stats(data.get("daily")),
         weekly=_load_stats(data.get("weekly")),
+        session_stats=_load_session_stats(data.get("session_stats")),
         win_streak=int(data.get("win_streak", 0)),
         vip_push_posted_for_streak=bool(data.get("vip_push_posted_for_streak", False)),
         conversion_posted=bool(data.get("conversion_posted", False)),
@@ -110,6 +112,7 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         state.session_stopped.clear()
         state.signal_sent_at.clear()
         state.signal_codes.clear()
+        state.session_stats.clear()
 
     return state
 
@@ -121,6 +124,7 @@ def save_state(path: Path, state: BotState) -> None:
         "executed": sorted(state.executed),
         "daily": _dump_stats(state.daily),
         "weekly": _dump_stats(state.weekly),
+        "session_stats": _dump_session_stats(state.session_stats),
         "win_streak": state.win_streak,
         "vip_push_posted_for_streak": state.vip_push_posted_for_streak,
         "conversion_posted": state.conversion_posted,
@@ -148,3 +152,13 @@ def _load_stats(raw: Any) -> Stats:
 
 def _dump_stats(stats: Stats) -> dict[str, int]:
     return {"total": stats.total, "wins": stats.wins, "losses": stats.losses}
+
+
+def _load_session_stats(raw: Any) -> dict[str, Stats]:
+    if not isinstance(raw, dict):
+        return {}
+    return {str(key): _load_stats(value) for key, value in raw.items()}
+
+
+def _dump_session_stats(stats: dict[str, Stats]) -> dict[str, dict[str, int]]:
+    return {key: _dump_stats(value) for key, value in stats.items()}

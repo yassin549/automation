@@ -1,6 +1,6 @@
 ﻿# Ghost Signal Sender
 
-Telegram signal scheduler that enforces the daily structure and rules you specified (pre-session, signals, results, VIP push, recaps) on the Tunisia trading windows.
+Telegram signal scheduler that enforces the daily structure you specified (pre-session, signals, results, VIP push, session recap, daily recap, weekly recap) on the Tunisia trading windows.
 
 **Requirements**
 - Python 3.11+
@@ -25,7 +25,7 @@ Optional:
 
 **Plan File**
 Provide a daily plan in JSON (default: `./plan.json`). Each signal includes direction and result; other fields have defaults that match the template.
-Each signal also posts a separate codes message containing both the promo code and VIP access code.
+Each signal also posts a separate code message (one code per signal).
 If you prefer auto-generated signals, use `--auto-plan --auto-win-rate 0.9` and no plan file is required.
 
 Example `plan.json`:

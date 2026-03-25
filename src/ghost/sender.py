@@ -17,10 +17,11 @@ from .messages import (
     PRE_SESSION_MESSAGE,
     ProfitExample,
     RecapStats,
-    build_codes_message,
+    build_code_message,
     build_daily_recap_message,
     build_free_delayed_message,
     build_result_message,
+    build_session_recap_message,
     build_signal_message,
     build_vip_push_message,
     build_vip_signal_message,
@@ -35,7 +36,7 @@ from .plan import (
     schedule_signals,
 )
 from .promo import generate_promo_code
-from .state import BotState, load_state, save_state
+from .state import BotState, Stats, load_state, save_state
 
 
 async def run_sender(
@@ -195,7 +196,7 @@ async def _run_session(
 
         await _wait_until(scheduled_at, tz)
 
-        promo_code, vip_code = _ensure_signal_codes(state, signal_key, config)
+        code = _ensure_signal_code(state, signal_key, config)
 
         if vip_target is not None:
             vip_id = f"{signal_key}:vip"
@@ -209,7 +210,7 @@ async def _run_session(
                 await _send_message(
                     client,
                     vip_target,
-                    build_codes_message(promo_code, vip_code),
+                    build_code_message(code),
                 )
                 state.mark_executed(vip_code_id)
                 save_state(config.state_path, state)
@@ -226,7 +227,7 @@ async def _run_session(
                 await _send_message(
                     client,
                     config.channel,
-                    build_codes_message(promo_code, vip_code),
+                    build_code_message(code),
                 )
                 state.mark_executed(free_code_id)
                 save_state(config.state_path, state)
@@ -246,7 +247,7 @@ async def _run_session(
                 await _send_message(
                     client,
                     config.channel,
-                    build_codes_message(promo_code, vip_code),
+                    build_code_message(code),
                 )
                 state.mark_executed(free_code_id)
                 save_state(config.state_path, state)
@@ -258,11 +259,28 @@ async def _run_session(
         result_id = f"{signal_key}:result"
         if not state.was_executed(result_id):
             await _wait_for_result(state, signal_key, scheduled_at, config, tz)
-            await _send_message(client, config.channel, build_result_message(signal, signal.result))
+            example_stats = RecapStats(
+                total=1,
+                wins=1 if signal.result.upper() == "WIN" else 0,
+                losses=1 if signal.result.upper() == "LOSS" else 0,
+            )
+            example = _profit_example(
+                example_stats,
+                config.example_start_balance,
+                config.example_risk_per_trade,
+                config.payout_ratio,
+            )
+            await _send_message(
+                client,
+                config.channel,
+                build_result_message(signal, signal.result, example),
+            )
             state.mark_executed(result_id)
             _update_stats_after_result(state, session_name, signal.result)
             await _maybe_post_vip_push(client, config, state, logger)
             save_state(config.state_path, state)
+
+    await _maybe_post_session_recap(client, config, state, logger, session_name)
 
 
 async def _wait_for_result(
@@ -350,6 +368,30 @@ async def _maybe_post_daily_recap(
     logger.info("Daily recap sent.")
 
 
+async def _maybe_post_session_recap(
+    client: TelegramClient,
+    config: AppConfig,
+    state: BotState,
+    logger: logging.Logger,
+    session_name: str,
+) -> None:
+    action_id = f"{state.day}:{session_name}:session-recap"
+    if state.was_executed(action_id):
+        return
+
+    stats = state.session_stats.get(session_name)
+    if not stats or stats.total <= 0:
+        return
+
+    recap = RecapStats(total=stats.total, wins=stats.wins, losses=stats.losses)
+    await _send_message(
+        client, config.channel, build_session_recap_message(session_name, recap)
+    )
+    state.mark_executed(action_id)
+    save_state(config.state_path, state)
+    logger.info("Session recap sent for %s.", session_name)
+
+
 async def _maybe_post_weekly_recap(
     client: TelegramClient,
     config: AppConfig,
@@ -401,7 +443,7 @@ async def _post_end_of_day_actions(
 def _weekly_examples(config: AppConfig, stats: RecapStats) -> list[ProfitExample]:
     examples: list[ProfitExample] = []
     risk_percent = config.example_risk_per_trade / config.example_start_balance
-    for starting_balance in (100, 500):
+    for starting_balance in (50,):
         risk_per_trade = int(round(starting_balance * risk_percent))
         examples.append(
             _profit_example(stats, starting_balance, risk_per_trade, config.payout_ratio)
@@ -434,6 +476,7 @@ def _format_money(value: float) -> str:
 def _update_stats_after_result(state: BotState, session_name: str, result: str) -> None:
     state.daily.record(result)
     state.weekly.record(result)
+    state.session_stats.setdefault(session_name, Stats()).record(result)
     if result.upper() == "WIN":
         state.win_streak += 1
         state.session_loss_streak[session_name] = 0
@@ -591,28 +634,11 @@ def _signal_key(day: date, session_name: str, index: int) -> str:
     return f"{day.isoformat()}:{session_name}:signal:{index}"
 
 
-def _ensure_signal_codes(
-    state: BotState, signal_key: str, config: AppConfig
-) -> tuple[str, str]:
-    promo_key = f"{signal_key}:promo"
-    vip_key = f"{signal_key}:vip"
-
-    promo_code = state.get_signal_code(promo_key)
-    vip_code = state.get_signal_code(vip_key)
-    legacy_code = state.get_signal_code(signal_key)
-    updated = False
-
-    base_code = promo_code or vip_code or legacy_code
-    if not base_code:
-        base_code = generate_promo_code()
-
-    if promo_code != base_code:
-        state.set_signal_code(promo_key, base_code)
-        updated = True
-    if vip_code != base_code:
-        state.set_signal_code(vip_key, base_code)
-        updated = True
-
-    if updated:
-        save_state(config.state_path, state)
-    return base_code, base_code
+def _ensure_signal_code(state: BotState, signal_key: str, config: AppConfig) -> str:
+    existing = state.get_signal_code(signal_key)
+    if existing:
+        return existing
+    code = generate_promo_code()
+    state.set_signal_code(signal_key, code)
+    save_state(config.state_path, state)
+    return code
