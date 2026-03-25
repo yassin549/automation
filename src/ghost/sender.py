@@ -11,15 +11,13 @@ from zoneinfo import ZoneInfo
 
 from .config import AppConfig
 from .messages import (
-    CHECKLIST_MESSAGE,
     CONVERSION_SCARCITY,
     CONVERSION_SOFT,
     CONVERSION_TRIAL,
     PRE_SESSION_MESSAGE,
-    RULES_MESSAGE,
     ProfitExample,
     RecapStats,
-    build_code_message,
+    build_codes_message,
     build_daily_recap_message,
     build_free_delayed_message,
     build_result_message,
@@ -130,11 +128,6 @@ async def _run_day(
 ) -> None:
     today = datetime.now(tz).date()
 
-    if config.post_rules_on_start:
-        await _maybe_post_rules(client, config, state, logger)
-    if config.post_checklist_on_start:
-        await _maybe_post_checklist(client, config, state)
-
     await _run_session(
         client, config, plan, state, logger, tz, today, "morning", vip_target
     )
@@ -202,7 +195,7 @@ async def _run_session(
 
         await _wait_until(scheduled_at, tz)
 
-        code = _ensure_signal_code(state, signal_key, config)
+        promo_code, vip_code = _ensure_signal_codes(state, signal_key, config)
 
         if vip_target is not None:
             vip_id = f"{signal_key}:vip"
@@ -216,7 +209,7 @@ async def _run_session(
                 await _send_message(
                     client,
                     vip_target,
-                    build_code_message(code, vip=True),
+                    build_codes_message(promo_code, vip_code),
                 )
                 state.mark_executed(vip_code_id)
                 save_state(config.state_path, state)
@@ -233,7 +226,7 @@ async def _run_session(
                 await _send_message(
                     client,
                     config.channel,
-                    build_code_message(code, vip=False),
+                    build_codes_message(promo_code, vip_code),
                 )
                 state.mark_executed(free_code_id)
                 save_state(config.state_path, state)
@@ -253,7 +246,7 @@ async def _run_session(
                 await _send_message(
                     client,
                     config.channel,
-                    build_code_message(code, vip=False),
+                    build_codes_message(promo_code, vip_code),
                 )
                 state.mark_executed(free_code_id)
                 save_state(config.state_path, state)
@@ -284,39 +277,6 @@ async def _wait_for_result(
         sent_at = sent_at.replace(tzinfo=tz)
     result_at = sent_at + timedelta(seconds=config.result_delay_seconds)
     await _wait_until(result_at, tz)
-
-
-async def _maybe_post_rules(
-    client: TelegramClient,
-    config: AppConfig,
-    state: BotState,
-    logger: logging.Logger,
-) -> None:
-    today = state.day
-    action_id = f"{today}:rules"
-    if state.was_executed(action_id):
-        return
-    message = await _send_message(client, config.channel, RULES_MESSAGE)
-    if config.pin_rules:
-        try:
-            await client.pin_message(config.channel, message, notify=False)
-        except Exception:
-            logger.exception("Failed to pin rules message")
-    state.mark_executed(action_id)
-    save_state(config.state_path, state)
-
-
-async def _maybe_post_checklist(
-    client: TelegramClient,
-    config: AppConfig,
-    state: BotState,
-) -> None:
-    action_id = f"{state.day}:checklist"
-    if state.was_executed(action_id):
-        return
-    await _send_message(client, config.channel, CHECKLIST_MESSAGE)
-    state.mark_executed(action_id)
-    save_state(config.state_path, state)
 
 
 async def _maybe_post_vip_push(
@@ -524,11 +484,6 @@ async def _run_mode_once(
                 logger.error("Plan error: %s", exc)
                 return
 
-        if config.post_rules_on_start:
-            await _maybe_post_rules(client, config, state, logger)
-        if config.post_checklist_on_start:
-            await _maybe_post_checklist(client, config, state)
-
         await _run_session(
             client, config, plan, state, logger, tz, today, mode, vip_target
         )
@@ -636,11 +591,28 @@ def _signal_key(day: date, session_name: str, index: int) -> str:
     return f"{day.isoformat()}:{session_name}:signal:{index}"
 
 
-def _ensure_signal_code(state: BotState, signal_key: str, config: AppConfig) -> str:
-    existing = state.get_signal_code(signal_key)
-    if existing:
-        return existing
-    code = generate_promo_code()
-    state.set_signal_code(signal_key, code)
-    save_state(config.state_path, state)
-    return code
+def _ensure_signal_codes(
+    state: BotState, signal_key: str, config: AppConfig
+) -> tuple[str, str]:
+    promo_key = f"{signal_key}:promo"
+    vip_key = f"{signal_key}:vip"
+
+    promo_code = state.get_signal_code(promo_key)
+    vip_code = state.get_signal_code(vip_key)
+    legacy_code = state.get_signal_code(signal_key)
+    updated = False
+
+    base_code = promo_code or vip_code or legacy_code
+    if not base_code:
+        base_code = generate_promo_code()
+
+    if promo_code != base_code:
+        state.set_signal_code(promo_key, base_code)
+        updated = True
+    if vip_code != base_code:
+        state.set_signal_code(vip_key, base_code)
+        updated = True
+
+    if updated:
+        save_state(config.state_path, state)
+    return base_code, base_code

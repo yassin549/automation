@@ -139,21 +139,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Payout ratio for profit examples (default: 0.8).",
     )
     parser.add_argument(
-        "--post-rules",
-        action="store_true",
-        help="Post the rules message at startup.",
-    )
-    parser.add_argument(
-        "--post-checklist",
-        action="store_true",
-        help="Post the assistant checklist at startup.",
-    )
-    parser.add_argument(
-        "--pin-rules",
-        action="store_true",
-        help="Pin the rules message when posting it.",
-    )
-    parser.add_argument(
         "--max-late-seconds",
         type=float,
         default=DEFAULT_MAX_LATE_SECONDS,
@@ -228,9 +213,6 @@ def main(argv: list[str] | None = None) -> None:
         example_start_balance=args.example_start_balance,
         example_risk_per_trade=args.example_risk,
         payout_ratio=args.payout_ratio,
-        post_rules_on_start=args.post_rules,
-        post_checklist_on_start=args.post_checklist,
-        pin_rules=args.pin_rules,
         max_late_seconds=args.max_late_seconds,
         allow_stale_plan_date=args.allow_stale_plan_date,
         vip_channel=args.vip_channel,

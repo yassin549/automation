@@ -87,7 +87,4 @@ jobs:
             --mode "${{ steps.select.outputs.mode }}" \
             --auto-plan \
             --auto-win-rate 0.9 \
-            --max-late-seconds 600 \
-            --post-rules \
-            --post-checklist \
-            --pin-rules
+            --max-late-seconds 600

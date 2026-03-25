@@ -71,9 +71,15 @@ def build_vip_signal_message(signal: "SignalLike") -> str:
     )
 
 
-def build_code_message(code: str, vip: bool) -> str:
-    title = "🎟️ VIP ACCESS CODE" if vip else "🎟️ PROMO CODE"
-    return f"{title}\n\n{code}\n\nCopy & paste to use. ✅"
+def build_codes_message(promo_code: str, vip_code: str) -> str:
+    return (
+        "🎟️ CODES\n\n"
+        "🎁 PROMO CODE:\n"
+        f"{promo_code}\n\n"
+        "👑 VIP ACCESS CODE:\n"
+        f"{vip_code}\n\n"
+        "Copy & paste to use. ✅"
+    )
 
 
 def build_free_delayed_message(signal: "SignalLike") -> str:
@@ -129,32 +135,6 @@ def build_weekly_recap_message(stats: RecapStats, examples: list["ProfitExample"
         ]
     )
     return "\n".join(lines)
-
-
-RULES_MESSAGE = (
-    "📌 GROUP RULES\n\n"
-    "1️⃣ Risk only 1–2% per trade\n\n"
-    "2️⃣ Do NOT enter late\n\n"
-    "3️⃣ Follow signals exactly\n\n"
-    "4️⃣ No overtrading\n\n"
-    "5️⃣ Losses are part of the system\n\n"
-    "6️⃣ Consistency > Emotion\n\n"
-    "Respect the process. ✅"
-)
-
-
-CHECKLIST_MESSAGE = (
-    "🧠 ASSISTANT CHECKLIST (IMPORTANT)\n\n"
-    "Every day you MUST:\n\n"
-    "✅ Post 1 pre-session message\n"
-    "✅ Post 3–5 signals per session\n"
-    "✅ Post result for EVERY signal\n"
-    "✅ Post at least 1 VIP promotion\n"
-    "✅ Post daily recap\n\n"
-    "Every week:\n\n"
-    "✅ Post weekly recap\n"
-    "✅ Post profit examples"
-)
 
 
 CONVERSION_SOFT = (

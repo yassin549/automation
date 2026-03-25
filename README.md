@@ -25,7 +25,7 @@ Optional:
 
 **Plan File**
 Provide a daily plan in JSON (default: `./plan.json`). Each signal includes direction and result; other fields have defaults that match the template.
-Each signal also posts a separate promo code message so followers can copy it.
+Each signal also posts a separate codes message containing both the promo code and VIP access code.
 If you prefer auto-generated signals, use `--auto-plan --auto-win-rate 0.9` and no plan file is required.
 
 Example `plan.json`:
@@ -94,9 +94,6 @@ python -m ghost.cli --once
 - `--daily-recap-time 18:00`: recap time in Tunisia time
 - `--weekly-recap-time 19:00`: weekly recap time (Sunday)
 - `--conversion-time 13:00`: daily conversion post time
-- `--post-rules`: post rules message at startup
-- `--post-checklist`: post the assistant checklist at startup
-- `--pin-rules`: pin the rules message
 
 **GitHub Actions**
 The workflow in `.github/workflows/telegram.yml` runs short jobs on a UTC schedule using `--mode`:

@@ -27,9 +27,6 @@ class AppConfig:
     example_start_balance: int
     example_risk_per_trade: int
     payout_ratio: float
-    post_rules_on_start: bool
-    post_checklist_on_start: bool
-    pin_rules: bool
     max_late_seconds: float
     allow_stale_plan_date: bool
 
@@ -75,9 +72,6 @@ def load_config(
     example_start_balance: int,
     example_risk_per_trade: int,
     payout_ratio: float,
-    post_rules_on_start: bool,
-    post_checklist_on_start: bool,
-    pin_rules: bool,
     max_late_seconds: float,
     allow_stale_plan_date: bool,
     vip_channel: str | None,
@@ -120,9 +114,6 @@ def load_config(
         example_start_balance=example_start_balance,
         example_risk_per_trade=example_risk_per_trade,
         payout_ratio=payout_ratio,
-        post_rules_on_start=post_rules_on_start,
-        post_checklist_on_start=post_checklist_on_start,
-        pin_rules=pin_rules,
         max_late_seconds=max_late_seconds,
         allow_stale_plan_date=allow_stale_plan_date,
     )
