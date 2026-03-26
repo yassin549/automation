@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 
 from telethon import TelegramClient, errors
 from telethon.sessions import StringSession
@@ -36,6 +37,7 @@ from .plan import (
     schedule_signals,
 )
 from .promo import generate_promo_code
+from .proof import format_profit_text, load_proof_dir, render_proof_image
 from .state import BotState, Stats, load_state, save_state
 
 
@@ -274,6 +276,17 @@ async def _run_session(
             await _send_message(client, config.channel, result_message)
             if vip_target is not None:
                 await _send_message(client, vip_target, result_message)
+            await _maybe_send_proof(
+                client,
+                config,
+                state,
+                signal_key,
+                scheduled_at,
+                signal.result,
+                example,
+                tz,
+                vip_target,
+            )
             state.mark_executed(result_id)
             _update_stats_after_result(state, session_name, signal.result)
             await _maybe_post_vip_push(client, config, state, logger)
@@ -411,6 +424,37 @@ async def _maybe_post_weekly_recap(
     state.mark_executed(action_id)
     save_state(config.state_path, state)
     logger.info("Weekly recap sent.")
+
+
+async def _maybe_send_proof(
+    client: TelegramClient,
+    config: AppConfig,
+    state: BotState,
+    signal_key: str,
+    scheduled_at: datetime,
+    result: str,
+    example: ProfitExample,
+    tz: ZoneInfo,
+    vip_target: object | None,
+) -> None:
+    sent_at = state.get_signal_sent_at(signal_key) or scheduled_at
+    if sent_at.tzinfo is None:
+        sent_at = sent_at.replace(tzinfo=tz)
+
+    proof_dir = load_proof_dir(Path.cwd())
+    profit_text = format_profit_text(result, example.win_profit, example.loss_cost)
+    proof_path = render_proof_image(proof_dir, result, sent_at, profit_text)
+    if not proof_path:
+        return
+    try:
+        await client.send_file(config.channel, proof_path)
+        if vip_target is not None:
+            await client.send_file(vip_target, proof_path)
+    finally:
+        try:
+            proof_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 async def _post_end_of_day_actions(
