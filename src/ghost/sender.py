@@ -468,6 +468,8 @@ def _profit_example(
 
 def _format_money(value: float) -> str:
     rounded = round(value, 2)
+    if isinstance(rounded, int):
+        return str(rounded)
     if rounded.is_integer():
         return str(int(rounded))
     return f"{rounded:.2f}"
