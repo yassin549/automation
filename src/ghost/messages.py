@@ -11,21 +11,21 @@ class RecapStats:
 
 
 PRE_SESSION_MESSAGE = (
-    "🕒 Session is live. 👋\n\n"
-    "Signals will be posted during this window."
+    "🕒 We're live for this session.\n\n"
+    "Signals will drop during this window. Keep alerts on."
 )
 
 
 def build_signal_message(signal: "SignalLike") -> str:
     return (
-        "🚨 Signal\n\n"
-        f"Asset: {signal.asset}\n"
-        f"Direction: {signal.direction}\n"
+        "🚨 New signal\n\n"
+        f"Setup: {signal.asset} — {signal.direction}\n"
         f"Expiry: {signal.expiry}\n"
-        f"Entry Window: {signal.entry_window}\n\n"
+        f"Entry window: {signal.entry_window}\n\n"
         f"Confidence: {signal.confidence}%\n"
-        f"Market Condition: {signal.market_condition}\n\n"
-        f"Insight: {signal.insight}"
+        f"Market: {signal.market_condition}\n"
+        f"Insight: {signal.insight}\n\n"
+        "If the entry window passes, skip it and wait for the next setup."
     )
 
 
@@ -36,36 +36,39 @@ def build_result_message(
     asset = _short_asset(signal.asset)
     if result.upper() == "WIN":
         outcome = "Result: WIN ✅"
+        tone = "Nice trade if you caught it."
     else:
         outcome = "Result: LOSS ❌"
+        tone = "No stress. We reset and wait for the next setup."
     profit = _signed_money(example.net_profit)
     return (
         "📊 Result\n\n"
-        f"{asset} — {direction}\n\n"
-        f"{outcome}\n\n"
-        f"If you traded with ${example.starting_balance}:\n"
-        f"Estimated Profit: {profit}"
+        f"{asset} — {direction}\n"
+        f"{outcome}\n"
+        f"{tone}\n\n"
+        f"Example P&L (using ${example.starting_balance}):\n"
+        f"Net: {profit}"
     )
 
 
 def build_vip_push_message() -> str:
     return (
         "🔥 Two wins in a row.\n\n"
-        "VIP entries were earlier.\n"
+        "VIP members got the earlier entries.\n"
         "Free signals arrive with a delay.\n\n"
-        'VIP access: message "VIP" or "TRIAL". 👑'
+        'Want early alerts? Reply "VIP" or "TRIAL".'
     )
 
 
 def build_vip_signal_message(signal: "SignalLike") -> str:
     return (
-        "👑 VIP signal:\n\n"
-        f"Asset: {signal.asset}\n"
-        f"Direction: {signal.direction}\n"
+        "👑 VIP signal\n\n"
+        f"Setup: {signal.asset} — {signal.direction}\n"
         f"Expiry: {signal.expiry}\n"
         f"Entry: {signal.entry}\n\n"
         f"Confidence: {signal.confidence}%"
     )
+
 
 def build_code_message(code: str) -> str:
     return code
@@ -73,53 +76,53 @@ def build_code_message(code: str) -> str:
 
 def build_free_delayed_message(signal: "SignalLike") -> str:
     return (
-        "⏳ Free signal (delayed):\n\n"
-        "VIP entered earlier.\n\n"
-        f"Asset: {_short_asset(signal.asset)}\n"
-        f"Direction: {signal.direction}\n"
-        f"Expiry: {signal.expiry}"
+        "⏳ Free signal (delayed)\n\n"
+        "VIP received this earlier.\n\n"
+        f"Setup: {_short_asset(signal.asset)} — {signal.direction}\n"
+        f"Expiry: {signal.expiry}\n\n"
+        "If the entry window already passed, skip this one."
     )
 
 
 def build_daily_recap_message(stats: RecapStats, example: "ProfitExample") -> str:
     win_rate = _win_rate(stats)
     return (
-        "📅 Daily recap:\n\n"
-        "Summary:\n\n"
+        "📅 Daily recap\n\n"
         f"Signals: {stats.total}\n"
         f"Wins: {stats.wins} ✅\n"
         f"Losses: {stats.losses} ❌\n"
-        f"Win Rate: {win_rate}%\n\n"
-        "💰 Example P&L:\n"
-        f"Starting Balance: ${example.starting_balance}\n"
+        f"Win rate: {win_rate}%\n\n"
+        "Example P&L (using the sizing below):\n"
+        f"Starting balance: ${example.starting_balance}\n"
         f"Risk per trade: ${example.risk_per_trade}\n\n"
         f"Wins: +${example.win_profit}\n"
         f"Losses: -${example.loss_cost}\n\n"
-        f"Net Profit: +${example.net_profit}"
+        f"Net: {_signed_money(example.net_profit)}\n\n"
+        "Thanks for trading with us today."
     )
 
 
 def build_weekly_recap_message(stats: RecapStats, examples: list["ProfitExample"]) -> str:
     win_rate = _win_rate(stats)
     lines = [
-        "🗓️ Weekly recap:",
+        "🗓️ Weekly recap",
         "",
-        f"Total Signals: {stats.total}",
+        f"Signals: {stats.total}",
         f"Wins: {stats.wins} ✅",
         f"Losses: {stats.losses} ❌",
         "",
-        f"Win Rate: {win_rate}%",
+        f"Win rate: {win_rate}%",
         "",
     ]
     for example in examples:
-        lines.append(f"If you traded with ${example.starting_balance}:")
-        lines.append(f"Estimated Profit: +${example.net_profit}")
+        lines.append(f"Example P&L (starting ${example.starting_balance}):")
+        lines.append(f"Net: {_signed_money(example.net_profit)}")
         lines.append("")
     lines.extend(
         [
-            "Weekly summary complete. ✅",
+            "Thanks for a solid week. ✅",
             "",
-            "VIP members get the earliest entries each session. 👑",
+            'Want earlier entries and full details? Reply "VIP". 👑',
         ]
     )
     return "\n".join(lines)
@@ -127,35 +130,32 @@ def build_weekly_recap_message(stats: RecapStats, examples: list["ProfitExample"
 
 def build_session_recap_message(session_name: str, stats: RecapStats) -> str:
     win_rate = _win_rate(stats)
-    label = "MORNING" if session_name == "morning" else "EVENING"
+    label = "Morning" if session_name == "morning" else "Evening"
     return (
-        f"🕒 {label} session recap:\n\n"
-        "Summary:\n\n"
+        f"🕒 {label} session recap\n\n"
         f"Signals: {stats.total}\n"
         f"Wins: {stats.wins} ✅\n"
         f"Losses: {stats.losses} ❌\n"
-        f"Win Rate: {win_rate}%"
+        f"Win rate: {win_rate}%"
     )
 
 
 CONVERSION_SOFT = (
-    "👀 Most people watch. Few act.\n\n"
-    "VIP members get in earlier and stay consistent.\n\n"
-    'VIP access available: "VIP". 👑'
+    "👋 Thinking about VIP?\n\n"
+    "VIP members get earlier entries, full details, and priority support.\n\n"
+    'If you want access, reply "VIP". 👑'
 )
 
 CONVERSION_TRIAL = (
-    "🤔 Not sure yet?\n\n"
-    "Test VIP for 24H (only $10).\n\n"
-    "See it for yourself, then decide.\n\n"
-    "VIP spots are filling up too fast, don't sleep on this opportunity"
+    "🧪 Want to try VIP first?\n\n"
+    "Grab a 24h trial for $10 and see the difference.\n\n"
+    'Reply "TRIAL" to start.'
 )
 
 CONVERSION_SCARCITY = (
-    "⚠️ VIP spots are filling up.\n\n"
-    "We keep the group small to maintain quality.\n\n"
-    "When it’s full, we close access.\n\n"
-    "this may be your last opportunity, join us and change your life"
+    "⚠️ VIP spots are limited.\n\n"
+    "We keep the group small so entries stay fast and support stays responsive.\n\n"
+    'Reply "VIP" to request a spot.'
 )
 
 
