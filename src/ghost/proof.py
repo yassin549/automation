@@ -203,11 +203,16 @@ def _replace_text(
     group = _detect_text_group(base_img, spec.region, spec.mode, threshold=threshold)
     if not group:
         return
-    bbox, _bg_color, text_color = group
+    bbox, bg_color, text_color = group
 
     x1, y1, x2, y2 = bbox
-    patch = base_img.crop((x1, y1, x2 + 1, y2 + 1))
-    img.paste(patch, (x1, y1))
+    fill_color = _sample_background_color(base_img, bbox, spec.region, bg_color)
+    pad = 1
+    ix1 = max(0, x1 - pad)
+    iy1 = max(0, y1 - pad)
+    ix2 = min(img.width - 1, x2 + pad)
+    iy2 = min(img.height - 1, y2 + pad)
+    draw.rectangle((ix1, iy1, ix2, iy2), fill=fill_color)
 
     max_w = x2 - x1 + 1
     max_h = y2 - y1 + 1
@@ -330,6 +335,32 @@ def _detect_text_group(
     # Convert to global coords
     bbox = (x1 + gx1, y1 + gy1, x1 + gx2, y1 + gy2)
     return bbox, bg, avg_text
+
+
+def _sample_background_color(
+    img: Image.Image,
+    bbox: tuple[int, int, int, int],
+    region: tuple[int, int, int, int],
+    fallback: tuple[int, int, int],
+) -> tuple[int, int, int]:
+    x1, y1, x2, y2 = bbox
+    rx1, ry1, rx2, ry2 = region
+    pad = 2
+    sx1 = max(rx1, x1 - pad)
+    sy1 = max(ry1, y1 - pad)
+    sx2 = min(rx2, x2 + pad)
+    sy2 = min(ry2, y2 + pad)
+
+    samples: list[tuple[int, int, int]] = []
+    for cy in range(sy1, sy2 + 1):
+        for cx in range(sx1, sx2 + 1):
+            if x1 <= cx <= x2 and y1 <= cy <= y2:
+                continue
+            samples.append(img.getpixel((cx, cy)))
+
+    if not samples:
+        return fallback
+    return Counter(samples).most_common(1)[0][0]
 
 
 def format_profit_text(result: str, win_profit: str, loss_cost: str) -> str:
