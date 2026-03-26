@@ -80,19 +80,30 @@ def build_result_message(
     promo = ""
     if audience != AUDIENCE_VIP:
         promo = _pick_line(PROMO_LINES, seed + ":promo")
-    return (
-        "📊 Result\n\n"
-        f"{asset} — {direction}\n"
-        f"{outcome}\n"
-        f"{tone}\n\n"
-        f"Example P&L (using ${example.starting_balance}):\n"
-        f"Net: {profit}\n\n"
-        f"{intro}\n"
-        f"{motivation}\n"
-        f"{promo + '\n' if promo else ''}\n"
-        "Why: we publish every outcome for transparency.\n\n"
-        f"{_promo_block(audience)}"
+    lines = [
+        "📊 Result",
+        "",
+        f"{asset} — {direction}",
+        f"{outcome}",
+        f"{tone}",
+        "",
+        f"Example P&L (using ${example.starting_balance}):",
+        f"Net: {profit}",
+        "",
+        f"{intro}",
+        f"{motivation}",
+    ]
+    if promo:
+        lines.append(promo)
+    lines.extend(
+        [
+            "",
+            "Why: we publish every outcome for transparency.",
+            "",
+            _promo_block(audience),
+        ]
     )
+    return "\n".join(lines)
 
 
 def build_vip_push_message() -> str:
