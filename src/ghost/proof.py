@@ -5,6 +5,8 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 import random
+from collections import Counter, deque
+import math
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -51,6 +53,35 @@ _LOSS_LAYOUT = ProofLayout(
 )
 
 
+@dataclass(frozen=True)
+class FieldSpec:
+    region: tuple[int, int, int, int]
+    mode: str = "single"  # "single" or "rightmost"
+
+
+_WIN_FIELDS: dict[str, FieldSpec] = {
+    "time_top": FieldSpec((940, 12, 1075, 50)),
+    "stake_top": FieldSpec((50, 60, 220, 110)),
+    "payout_top": FieldSpec((720, 60, 920, 110)),
+    "profit_top": FieldSpec((900, 60, 1075, 110)),
+    "open_time": FieldSpec((30, 150, 220, 210)),
+    "close_time": FieldSpec((860, 150, 1075, 210)),
+    "payout_center": FieldSpec((520, 300, 700, 335), mode="rightmost"),
+    "profit_center": FieldSpec((520, 340, 700, 380), mode="rightmost"),
+}
+
+_LOSS_FIELDS: dict[str, FieldSpec] = {
+    "time_top": FieldSpec((450, 5, 535, 40)),
+    "stake_top": FieldSpec((40, 40, 150, 85)),
+    "payout_top": FieldSpec((320, 40, 420, 85)),
+    "profit_top": FieldSpec((430, 40, 535, 85)),
+    "open_time": FieldSpec((20, 90, 170, 135)),
+    "close_time": FieldSpec((360, 90, 535, 135)),
+    "payout_center": FieldSpec((200, 220, 360, 255), mode="rightmost"),
+    "profit_center": FieldSpec((200, 255, 360, 295), mode="rightmost"),
+}
+
+
 def pick_proof_image(
     proof_dir: Path, rng: random.Random | None = None
 ) -> Path | None:
@@ -74,30 +105,39 @@ def render_proof_image(
     result: str,
     taken_at: datetime,
     profit_text: str,
+    stake_text: str,
+    payout_text: str,
 ) -> Path | None:
-    layout = _WIN_LAYOUT if result.upper() == "WIN" else _LOSS_LAYOUT
-    template_path = proof_dir / layout.template_name
+    is_win = result.upper() == "WIN"
+    template_name = "win.jpg" if is_win else "loss.png"
+    template_path = proof_dir / template_name
     if not template_path.exists():
         return None
 
-    img = Image.open(template_path).convert("RGB")
+    base_img = Image.open(template_path).convert("RGB")
+    img = base_img.copy()
     draw = ImageDraw.Draw(img)
 
-    time_text = _format_time(taken_at)
-    time_font = _load_font(10)
-    profit_font = _load_font(12)
+    time_short = _format_time_short(taken_at)
+    time_full = _format_time_full(taken_at)
 
-    draw.rectangle(layout.time_box_left, fill=_BACKGROUND_COLOR)
-    draw.rectangle(layout.time_box_right, fill=_BACKGROUND_COLOR)
-    draw.text(layout.time_left_pos, time_text, fill=layout.time_color, font=time_font)
-    draw.text(layout.time_right_pos, time_text, fill=layout.time_color, font=time_font)
+    fields = _WIN_FIELDS if is_win else _LOSS_FIELDS
+    values = {
+        "time_top": time_short,
+        "stake_top": stake_text,
+        "payout_top": payout_text,
+        "profit_top": profit_text,
+        "open_time": time_full,
+        "close_time": time_full,
+        "payout_center": payout_text,
+        "profit_center": profit_text,
+    }
 
-    draw.rectangle(layout.profit_box, fill=_BACKGROUND_COLOR)
-    label = "Profit:"
-    draw.text(layout.profit_label_pos, label, fill=_LABEL_COLOR, font=profit_font)
-    label_width = draw.textlength(label, font=profit_font)
-    value_pos = (layout.profit_label_pos[0] + int(label_width) + 4, layout.profit_label_pos[1])
-    draw.text(value_pos, profit_text, fill=layout.profit_color, font=profit_font)
+    for name, text in values.items():
+        spec = fields.get(name)
+        if not spec:
+            continue
+        _replace_text(base_img, img, draw, spec, text)
 
     output_dir = proof_dir / "_generated"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -111,11 +151,23 @@ def _format_time(timestamp: datetime) -> str:
     return f"{timestamp:%H:%M:%S}.{timestamp.microsecond // 1000:03d}"
 
 
+def _format_time_short(timestamp: datetime) -> str:
+    return f"{timestamp:%H:%M}"
+
+
+def _format_time_full(timestamp: datetime) -> str:
+    date_part = f"{timestamp:%d/%m}"
+    time_part = _format_time(timestamp)
+    return f"{date_part} {time_part}"
+
+
 @lru_cache(maxsize=8)
 def _load_font(size: int) -> ImageFont.ImageFont:
     candidates = [
         Path(__file__).with_name("assets") / "Inter-Regular.ttf",
         Path(__file__).with_name("assets") / "Inter-SemiBold.ttf",
+        Path("C:/Windows/Fonts/segoeui.ttf"),
+        Path("C:/Windows/Fonts/arial.ttf"),
     ]
     for path in candidates:
         if path.exists():
@@ -138,6 +190,146 @@ def _format_currency(value: str) -> str:
         return f"{float(value):.2f}"
     except ValueError:
         return value
+
+
+def _replace_text(
+    base_img: Image.Image,
+    img: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    spec: FieldSpec,
+    text: str,
+    threshold: float = 35.0,
+) -> None:
+    group = _detect_text_group(base_img, spec.region, spec.mode, threshold=threshold)
+    if not group:
+        return
+    bbox, _bg_color, text_color = group
+
+    x1, y1, x2, y2 = bbox
+    patch = base_img.crop((x1, y1, x2 + 1, y2 + 1))
+    img.paste(patch, (x1, y1))
+
+    max_w = x2 - x1 + 1
+    max_h = y2 - y1 + 1
+    font = _fit_font(draw, text, max_w, max_h)
+    text_box = draw.textbbox((0, 0), text, font=font)
+    text_w = text_box[2] - text_box[0]
+    text_h = text_box[3] - text_box[1]
+
+    align = _infer_align(spec.region, bbox)
+    if align == "right":
+        x = x2 - text_w
+    else:
+        x = x1
+    y = y1 + max(0, (max_h - text_h) // 2)
+    draw.text((x, y), text, fill=text_color, font=font)
+
+
+def _fit_font(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    max_width: int,
+    max_height: int,
+) -> ImageFont.ImageFont:
+    size = max(6, max_height)
+    while size >= 6:
+        font = _load_font(size)
+        box = draw.textbbox((0, 0), text, font=font)
+        width = box[2] - box[0]
+        height = box[3] - box[1]
+        if width <= max_width and height <= max_height:
+            return font
+        size -= 1
+    return _load_font(6)
+
+
+def _infer_align(region: tuple[int, int, int, int], bbox: tuple[int, int, int, int]) -> str:
+    rx1, _, rx2, _ = region
+    bx1, _, bx2, _ = bbox
+    left_gap = bx1 - rx1
+    right_gap = rx2 - bx2
+    if right_gap < left_gap:
+        return "right"
+    return "left"
+
+
+def _detect_text_group(
+    img: Image.Image,
+    region: tuple[int, int, int, int],
+    mode: str,
+    threshold: float,
+) -> tuple[tuple[int, int, int, int], tuple[int, int, int], tuple[int, int, int]] | None:
+    x1, y1, x2, y2 = region
+    crop = img.crop((x1, y1, x2, y2))
+    pixels = list(crop.getdata())
+    if not pixels:
+        return None
+
+    bg = Counter(pixels).most_common(1)[0][0]
+
+    def dist(c: tuple[int, int, int]) -> float:
+        return math.sqrt((c[0] - bg[0]) ** 2 + (c[1] - bg[1]) ** 2 + (c[2] - bg[2]) ** 2)
+
+    w, h = crop.size
+    mask = [[False] * w for _ in range(h)]
+    for i, px in enumerate(pixels):
+        if dist(px) > threshold:
+            cx = i % w
+            cy = i // w
+            mask[cy][cx] = True
+
+    visited = [[False] * w for _ in range(h)]
+    comps: list[tuple[int, int, int, int, list[tuple[int, int, int]]]] = []
+    for cy in range(h):
+        for cx in range(w):
+            if visited[cy][cx] or not mask[cy][cx]:
+                continue
+            q = deque([(cx, cy)])
+            visited[cy][cx] = True
+            minx = maxx = cx
+            miny = maxy = cy
+            text_pixels: list[tuple[int, int, int]] = []
+            while q:
+                x, y = q.popleft()
+                text_pixels.append(crop.getpixel((x, y)))
+                minx = min(minx, x)
+                miny = min(miny, y)
+                maxx = max(maxx, x)
+                maxy = max(maxy, y)
+                for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                    if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx] and mask[ny][nx]:
+                        visited[ny][nx] = True
+                        q.append((nx, ny))
+            if (maxx - minx) * (maxy - miny) >= 10:
+                comps.append((minx, miny, maxx, maxy, text_pixels))
+
+    if not comps:
+        return None
+
+    # Merge close components into groups by x-gap.
+    comps.sort(key=lambda c: c[0])
+    groups: list[list[tuple[int, int, int, int, list[tuple[int, int, int]]]]] = []
+    current: list[tuple[int, int, int, int, list[tuple[int, int, int]]]] = [comps[0]]
+    for comp in comps[1:]:
+        gap = comp[0] - current[-1][2]
+        if gap > 6:
+            groups.append(current)
+            current = [comp]
+        else:
+            current.append(comp)
+    groups.append(current)
+
+    group = groups[-1] if mode == "rightmost" else groups[0]
+    gx1 = min(c[0] for c in group)
+    gy1 = min(c[1] for c in group)
+    gx2 = max(c[2] for c in group)
+    gy2 = max(c[3] for c in group)
+    text_pixels = [px for c in group for px in c[4]]
+    avg_text = tuple(int(sum(p[i] for p in text_pixels) / len(text_pixels)) for i in range(3))
+
+    # Convert to global coords
+    bbox = (x1 + gx1, y1 + gy1, x1 + gx2, y1 + gy2)
+    return bbox, bg, avg_text
 
 
 def format_profit_text(result: str, win_profit: str, loss_cost: str) -> str:

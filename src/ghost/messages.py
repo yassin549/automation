@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 
 
 @dataclass(frozen=True)
@@ -41,13 +42,20 @@ def build_result_message(
         outcome = "Result: LOSS ❌"
         tone = "No stress. We reset and wait for the next setup."
     profit = _signed_money(example.net_profit)
+    seed = f"{signal.asset}-{signal.direction}-{result}"
+    intro = _pick_line(INTRO_LINES, seed)
+    motivation = _pick_line(MOTIVATION_LINES, seed + ":motivation")
+    promo = _pick_line(PROMO_LINES, seed + ":promo")
     return (
         "📊 Result\n\n"
         f"{asset} — {direction}\n"
         f"{outcome}\n"
         f"{tone}\n\n"
         f"Example P&L (using ${example.starting_balance}):\n"
-        f"Net: {profit}"
+        f"Net: {profit}\n\n"
+        f"{intro}\n"
+        f"{motivation}\n"
+        f"{promo}"
     )
 
 
@@ -159,6 +167,38 @@ CONVERSION_SCARCITY = (
 )
 
 
+INTRO_LINES = [
+    "Optitrade Signals — clear setups, clear expiry, and transparent results.",
+    "APEX signals: simple entries, consistent rules, and honest recaps.",
+    "We focus on quality setups and clean execution, not noise.",
+    "Trade smart: one setup at a time, same rules every session.",
+]
+
+MOTIVATION_LINES = [
+    "Discipline beats hype. Stick to the plan and let the edge play out.",
+    "Protect capital first. The wins follow the process.",
+    "One trade doesn’t define the day — consistency does.",
+    "Patience pays. Wait for your window and execute cleanly.",
+]
+
+PROMO_LINES = [
+    'VIP gets earlier entries and full details. Reply "VIP" to upgrade.',
+    'Want the earliest alerts? Message "VIP" or "TRIAL".',
+    "VIP members see entries first and get priority support.",
+    "Upgrade to VIP for early entries and fewer delays.",
+]
+
+
+def build_follow_instructions_message() -> str:
+    return (
+        "To follow our signals correctly you must:\n"
+        "1. Register here https://optitrade.site/?ref=APEX\n"
+        "2. Deposit minimum $50\n"
+        "3. Use same expiry & entry\n\n"
+        "⚠️ Signals only work properly on our platform."
+    )
+
+
 @dataclass(frozen=True)
 class ProfitExample:
     starting_balance: int
@@ -187,6 +227,12 @@ def _signed_money(value: str) -> str:
     if value.startswith("-"):
         return f"-${value[1:]}"
     return f"+${value}"
+
+
+def _pick_line(lines: list[str], seed: str) -> str:
+    digest = hashlib.md5(seed.encode("utf-8")).hexdigest()
+    index = int(digest[:8], 16) % len(lines)
+    return lines[index]
 
 
 def _win_rate(stats: RecapStats) -> int:

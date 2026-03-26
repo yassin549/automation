@@ -36,6 +36,7 @@ class BotState:
     session_stopped: dict[str, bool] = field(default_factory=dict)
     signal_sent_at: dict[str, str] = field(default_factory=dict)
     signal_codes: dict[str, str] = field(default_factory=dict)
+    channel_results_posted: int = 0
 
     def was_executed(self, action_id: str) -> bool:
         return action_id in self.executed
@@ -95,6 +96,7 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         signal_codes={
             str(key): str(value) for key, value in (data.get("signal_codes") or {}).items()
         },
+        channel_results_posted=int(data.get("channel_results_posted", 0)),
     )
 
     if state.week != week_id:
@@ -113,6 +115,7 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         state.signal_sent_at.clear()
         state.signal_codes.clear()
         state.session_stats.clear()
+        state.channel_results_posted = 0
 
     return state
 
@@ -132,6 +135,7 @@ def save_state(path: Path, state: BotState) -> None:
         "session_stopped": state.session_stopped,
         "signal_sent_at": state.signal_sent_at,
         "signal_codes": state.signal_codes,
+        "channel_results_posted": state.channel_results_posted,
     }
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 

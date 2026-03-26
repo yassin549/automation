@@ -18,6 +18,7 @@ from .messages import (
     PRE_SESSION_MESSAGE,
     ProfitExample,
     RecapStats,
+    build_follow_instructions_message,
     build_code_message,
     build_daily_recap_message,
     build_free_delayed_message,
@@ -39,6 +40,10 @@ from .plan import (
 from .promo import generate_promo_code
 from .proof import format_profit_text, load_proof_dir, render_proof_image
 from .state import BotState, Stats, load_state, save_state
+
+VIP_SIGNALS_PER_SESSION = 3
+CHANNEL_SIGNALS_PER_SESSION = 1
+FOLLOW_INSTRUCTIONS_EVERY = 4
 
 
 async def run_sender(
@@ -160,6 +165,8 @@ async def _run_session(
     vip_target: object | None,
 ) -> None:
     signals = plan.sessions[session_name]
+    if vip_target is not None:
+        signals = signals[:VIP_SIGNALS_PER_SESSION]
     schedule = schedule_signals(session_name, signals, today, tz)
     start_time, end_time = SESSION_WINDOWS[session_name]
     start_dt = datetime.combine(today, start_time, tzinfo=tz)
@@ -178,15 +185,21 @@ async def _run_session(
     if not state.was_executed(pre_id):
         if datetime.now(tz) <= start_dt + timedelta(seconds=config.max_late_seconds):
             await _wait_until(start_dt, tz)
-            await _send_message(client, config.channel, PRE_SESSION_MESSAGE)
             if vip_target is not None:
                 await _send_message(client, vip_target, PRE_SESSION_MESSAGE)
+            else:
+                await _send_message(client, config.channel, PRE_SESSION_MESSAGE)
             state.mark_executed(pre_id)
             state.session_loss_streak[session_name] = 0
             state.session_stopped[session_name] = False
             save_state(config.state_path, state)
         else:
             logger.warning("Skipping late pre-session post for %s.", session_name)
+
+    if vip_target is not None:
+        channel_indexes = set(range(min(CHANNEL_SIGNALS_PER_SESSION, len(signals))))
+    else:
+        channel_indexes = set(range(len(signals)))
 
     for index, (signal, scheduled_at) in enumerate(zip(signals, schedule)):
         if state.session_stopped.get(session_name, False):
@@ -201,6 +214,8 @@ async def _run_session(
         await _wait_until(scheduled_at, tz)
 
         code = _ensure_signal_code(state, signal_key, config)
+
+        send_to_channel = index in channel_indexes
 
         if vip_target is not None:
             vip_id = f"{signal_key}:vip"
@@ -219,22 +234,23 @@ async def _run_session(
                 state.mark_executed(vip_code_id)
                 save_state(config.state_path, state)
 
-            free_id = f"{signal_key}:free"
-            if not state.was_executed(free_id):
-                await asyncio.sleep(config.free_delay_seconds)
-                await _send_message(client, config.channel, build_free_delayed_message(signal))
-                state.mark_executed(free_id)
-                save_state(config.state_path, state)
+            if send_to_channel:
+                free_id = f"{signal_key}:free"
+                if not state.was_executed(free_id):
+                    await asyncio.sleep(config.free_delay_seconds)
+                    await _send_message(client, config.channel, build_free_delayed_message(signal))
+                    state.mark_executed(free_id)
+                    save_state(config.state_path, state)
 
-            free_code_id = f"{signal_key}:free-code"
-            if not state.was_executed(free_code_id):
-                await _send_message(
-                    client,
-                    config.channel,
-                    build_code_message(code),
-                )
-                state.mark_executed(free_code_id)
-                save_state(config.state_path, state)
+                free_code_id = f"{signal_key}:free-code"
+                if not state.was_executed(free_code_id):
+                    await _send_message(
+                        client,
+                        config.channel,
+                        build_code_message(code),
+                    )
+                    state.mark_executed(free_code_id)
+                    save_state(config.state_path, state)
 
             if state.get_signal_sent_at(signal_key) is None:
                 state.set_signal_sent_at(signal_key, datetime.now(tz))
@@ -275,7 +291,10 @@ async def _run_session(
                 config.payout_ratio,
             )
             result_message = build_result_message(signal, signal.result, example)
-            await _send_message(client, config.channel, result_message)
+            if send_to_channel:
+                await _send_message(client, config.channel, result_message)
+                state.channel_results_posted += 1
+                await _maybe_post_follow_instructions(client, config, state, logger)
             if vip_target is not None:
                 await _send_message(client, vip_target, result_message)
             await _maybe_send_proof(
@@ -288,6 +307,7 @@ async def _run_session(
                 example,
                 tz,
                 vip_target,
+                send_to_channel,
             )
             state.mark_executed(result_id)
             _update_stats_after_result(state, session_name, signal.result)
@@ -329,6 +349,28 @@ async def _maybe_post_vip_push(
     state.vip_push_posted_for_streak = True
     save_state(config.state_path, state)
     logger.info("VIP push sent after win streak.")
+
+
+async def _maybe_post_follow_instructions(
+    client: TelegramClient,
+    config: AppConfig,
+    state: BotState,
+    logger: logging.Logger,
+) -> None:
+    if (
+        state.channel_results_posted <= 0
+        or state.channel_results_posted % FOLLOW_INSTRUCTIONS_EVERY != 0
+    ):
+        return
+
+    action_id = f"{state.day}:follow:{state.channel_results_posted}"
+    if state.was_executed(action_id):
+        return
+
+    await _send_message(client, config.channel, build_follow_instructions_message())
+    state.mark_executed(action_id)
+    save_state(config.state_path, state)
+    logger.info("Follow instructions sent.")
 
 
 async def _maybe_post_conversion(
@@ -438,6 +480,7 @@ async def _maybe_send_proof(
     example: ProfitExample,
     tz: ZoneInfo,
     vip_target: object | None,
+    send_to_channel: bool,
 ) -> None:
     sent_at = state.get_signal_sent_at(signal_key) or scheduled_at
     if sent_at.tzinfo is None:
@@ -445,11 +488,23 @@ async def _maybe_send_proof(
 
     proof_dir = load_proof_dir(Path.cwd())
     profit_text = format_profit_text(result, example.win_profit, example.loss_cost)
-    proof_path = render_proof_image(proof_dir, result, sent_at, profit_text)
+    profit_value = _profit_value(result, example.win_profit, example.loss_cost)
+    payout_value = example.risk_per_trade + profit_value
+    stake_text = f"${_format_amount(example.risk_per_trade)}"
+    payout_text = f"${_format_amount(payout_value)}"
+    proof_path = render_proof_image(
+        proof_dir,
+        result,
+        sent_at,
+        profit_text,
+        stake_text,
+        payout_text,
+    )
     if not proof_path:
         return
     try:
-        await client.send_file(config.channel, proof_path)
+        if send_to_channel:
+            await client.send_file(config.channel, proof_path)
         if vip_target is not None:
             await client.send_file(vip_target, proof_path)
     finally:
@@ -518,6 +573,19 @@ def _format_money(value: float) -> str:
     if rounded.is_integer():
         return str(int(rounded))
     return f"{rounded:.2f}"
+
+
+def _format_amount(value: float) -> str:
+    return f"{value:.2f}"
+
+
+def _profit_value(result: str, win_profit: str, loss_cost: str) -> float:
+    try:
+        if result.upper() == "WIN":
+            return float(win_profit)
+        return -float(loss_cost)
+    except ValueError:
+        return 0.0
 
 
 def _update_stats_after_result(state: BotState, session_name: str, result: str) -> None:
