@@ -29,6 +29,10 @@ class BotState:
     daily: Stats = field(default_factory=Stats)
     weekly: Stats = field(default_factory=Stats)
     session_stats: dict[str, Stats] = field(default_factory=dict)
+    channel_daily: Stats = field(default_factory=Stats)
+    channel_weekly: Stats = field(default_factory=Stats)
+    channel_session_stats: dict[str, Stats] = field(default_factory=dict)
+    channel_win_streak: int = 0
     win_streak: int = 0
     vip_push_posted_for_streak: bool = False
     conversion_posted: bool = False
@@ -37,6 +41,9 @@ class BotState:
     signal_sent_at: dict[str, str] = field(default_factory=dict)
     signal_codes: dict[str, str] = field(default_factory=dict)
     channel_results_posted: int = 0
+    vip_welcome_sent: bool = False
+    vip_rules_sent: bool = False
+    vip_follow_pinned: bool = False
 
     def was_executed(self, action_id: str) -> bool:
         return action_id in self.executed
@@ -78,6 +85,10 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         daily=_load_stats(data.get("daily")),
         weekly=_load_stats(data.get("weekly")),
         session_stats=_load_session_stats(data.get("session_stats")),
+        channel_daily=_load_stats(data.get("channel_daily")),
+        channel_weekly=_load_stats(data.get("channel_weekly")),
+        channel_session_stats=_load_session_stats(data.get("channel_session_stats")),
+        channel_win_streak=int(data.get("channel_win_streak", 0)),
         win_streak=int(data.get("win_streak", 0)),
         vip_push_posted_for_streak=bool(data.get("vip_push_posted_for_streak", False)),
         conversion_posted=bool(data.get("conversion_posted", False)),
@@ -97,11 +108,15 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
             str(key): str(value) for key, value in (data.get("signal_codes") or {}).items()
         },
         channel_results_posted=int(data.get("channel_results_posted", 0)),
+        vip_welcome_sent=bool(data.get("vip_welcome_sent", False)),
+        vip_rules_sent=bool(data.get("vip_rules_sent", False)),
+        vip_follow_pinned=bool(data.get("vip_follow_pinned", False)),
     )
 
     if state.week != week_id:
         state.week = week_id
         state.weekly = Stats()
+        state.channel_weekly = Stats()
 
     if state.day != today:
         state.day = today
@@ -115,6 +130,9 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         state.signal_sent_at.clear()
         state.signal_codes.clear()
         state.session_stats.clear()
+        state.channel_daily = Stats()
+        state.channel_win_streak = 0
+        state.channel_session_stats.clear()
         state.channel_results_posted = 0
 
     return state
@@ -128,6 +146,10 @@ def save_state(path: Path, state: BotState) -> None:
         "daily": _dump_stats(state.daily),
         "weekly": _dump_stats(state.weekly),
         "session_stats": _dump_session_stats(state.session_stats),
+        "channel_daily": _dump_stats(state.channel_daily),
+        "channel_weekly": _dump_stats(state.channel_weekly),
+        "channel_session_stats": _dump_session_stats(state.channel_session_stats),
+        "channel_win_streak": state.channel_win_streak,
         "win_streak": state.win_streak,
         "vip_push_posted_for_streak": state.vip_push_posted_for_streak,
         "conversion_posted": state.conversion_posted,
@@ -136,6 +158,9 @@ def save_state(path: Path, state: BotState) -> None:
         "signal_sent_at": state.signal_sent_at,
         "signal_codes": state.signal_codes,
         "channel_results_posted": state.channel_results_posted,
+        "vip_welcome_sent": state.vip_welcome_sent,
+        "vip_rules_sent": state.vip_rules_sent,
+        "vip_follow_pinned": state.vip_follow_pinned,
     }
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 

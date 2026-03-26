@@ -12,12 +12,14 @@ from zoneinfo import ZoneInfo
 
 from .config import AppConfig
 from .messages import (
+    AUDIENCE_CHANNEL,
+    AUDIENCE_VIP,
     CONVERSION_SCARCITY,
     CONVERSION_SOFT,
     CONVERSION_TRIAL,
-    PRE_SESSION_MESSAGE,
     ProfitExample,
     RecapStats,
+    build_pre_session_message,
     build_follow_instructions_message,
     build_code_message,
     build_daily_recap_message,
@@ -27,6 +29,9 @@ from .messages import (
     build_signal_message,
     build_vip_push_message,
     build_vip_signal_message,
+    build_vip_welcome_message,
+    build_vip_rules_message,
+    build_vip_follow_message,
     build_weekly_recap_message,
 )
 from .plan import (
@@ -102,6 +107,9 @@ async def run_sender(
                         await asyncio.sleep(60)
                         continue
 
+                if vip_target is not None:
+                    await _ensure_vip_onboarding(client, config, state, logger, vip_target)
+
                 await _run_day(client, config, plan, state, logger, tz, vip_target)
 
                 if once:
@@ -140,12 +148,6 @@ async def _run_day(
         client, config, plan, state, logger, tz, today, "morning", vip_target
     )
 
-    conversion_dt = datetime.combine(today, config.conversion_time, tzinfo=tz)
-    evening_start = datetime.combine(today, SESSION_WINDOWS["evening"][0], tzinfo=tz)
-    if conversion_dt <= evening_start:
-        await _wait_until(conversion_dt, tz)
-        await _maybe_post_conversion(client, config, state, logger, tz)
-
     await _run_session(
         client, config, plan, state, logger, tz, today, "evening", vip_target
     )
@@ -181,18 +183,30 @@ async def _run_session(
     if session_name not in state.session_stopped:
         state.session_stopped[session_name] = False
 
-    pre_id = _action_id(today, session_name, "pre")
-    if not state.was_executed(pre_id):
+    pre_channel_id = _action_id(today, session_name, "pre-channel")
+    pre_vip_id = _action_id(today, session_name, "pre-vip")
+    pre_channel_done = state.was_executed(pre_channel_id)
+    pre_vip_done = vip_target is None or state.was_executed(pre_vip_id)
+    if not (pre_channel_done and pre_vip_done):
         if datetime.now(tz) <= start_dt + timedelta(seconds=config.max_late_seconds):
             await _wait_until(start_dt, tz)
-            if vip_target is not None:
-                await _send_message(client, vip_target, PRE_SESSION_MESSAGE)
-            else:
-                await _send_message(client, config.channel, PRE_SESSION_MESSAGE)
-            state.mark_executed(pre_id)
-            state.session_loss_streak[session_name] = 0
-            state.session_stopped[session_name] = False
-            save_state(config.state_path, state)
+            pre_sent = False
+            if vip_target is not None and not state.was_executed(pre_vip_id):
+                await _send_message(
+                    client, vip_target, build_pre_session_message(AUDIENCE_VIP)
+                )
+                state.mark_executed(pre_vip_id)
+                pre_sent = True
+            if not state.was_executed(pre_channel_id):
+                await _send_message(
+                    client, config.channel, build_pre_session_message(AUDIENCE_CHANNEL)
+                )
+                state.mark_executed(pre_channel_id)
+                pre_sent = True
+            if pre_sent:
+                state.session_loss_streak[session_name] = 0
+                state.session_stopped[session_name] = False
+                save_state(config.state_path, state)
         else:
             logger.warning("Skipping late pre-session post for %s.", session_name)
 
@@ -200,6 +214,8 @@ async def _run_session(
         channel_indexes = set(range(min(CHANNEL_SIGNALS_PER_SESSION, len(signals))))
     else:
         channel_indexes = set(range(len(signals)))
+    channel_first_index = min(channel_indexes) if channel_indexes else None
+    vip_extra_count = max(0, len(signals) - len(channel_indexes)) if vip_target else 0
 
     for index, (signal, scheduled_at) in enumerate(zip(signals, schedule)):
         if state.session_stopped.get(session_name, False):
@@ -238,7 +254,11 @@ async def _run_session(
                 free_id = f"{signal_key}:free"
                 if not state.was_executed(free_id):
                     await asyncio.sleep(config.free_delay_seconds)
-                    await _send_message(client, config.channel, build_free_delayed_message(signal))
+                    await _send_message(
+                        client,
+                        config.channel,
+                        build_free_delayed_message(signal, vip_extra_count),
+                    )
                     state.mark_executed(free_id)
                     save_state(config.state_path, state)
 
@@ -258,7 +278,9 @@ async def _run_session(
         else:
             free_id = f"{signal_key}:free"
             if not state.was_executed(free_id):
-                await _send_message(client, config.channel, build_signal_message(signal))
+                await _send_message(
+                    client, config.channel, build_signal_message(signal, AUDIENCE_CHANNEL)
+                )
                 state.mark_executed(free_id)
                 save_state(config.state_path, state)
 
@@ -290,13 +312,27 @@ async def _run_session(
                 config.example_risk_per_trade,
                 config.payout_ratio,
             )
-            result_message = build_result_message(signal, signal.result, example)
             if send_to_channel:
+                result_message = build_result_message(
+                    signal, signal.result, example, AUDIENCE_CHANNEL
+                )
                 await _send_message(client, config.channel, result_message)
                 state.channel_results_posted += 1
                 await _maybe_post_follow_instructions(client, config, state, logger)
+                await _maybe_post_conversion_after_win(
+                    client,
+                    config,
+                    state,
+                    logger,
+                    today,
+                    session_name,
+                    signal.result,
+                )
             if vip_target is not None:
-                await _send_message(client, vip_target, result_message)
+                result_message_vip = build_result_message(
+                    signal, signal.result, example, AUDIENCE_VIP
+                )
+                await _send_message(client, vip_target, result_message_vip)
             await _maybe_send_proof(
                 client,
                 config,
@@ -307,11 +343,12 @@ async def _run_session(
                 example,
                 tz,
                 vip_target,
-                send_to_channel,
+                send_to_channel and index == channel_first_index,
             )
             state.mark_executed(result_id)
-            _update_stats_after_result(state, session_name, signal.result)
-            await _maybe_post_vip_push(client, config, state, logger)
+            _update_stats_after_result(state, session_name, signal.result, send_to_channel)
+            if send_to_channel:
+                await _maybe_post_vip_push(client, config, state, logger)
             save_state(config.state_path, state)
 
     await _maybe_post_session_recap(client, config, state, logger, session_name)
@@ -337,10 +374,10 @@ async def _maybe_post_vip_push(
     state: BotState,
     logger: logging.Logger,
 ) -> None:
-    if state.win_streak < 2 or state.vip_push_posted_for_streak:
+    if state.channel_win_streak < 2 or state.vip_push_posted_for_streak:
         return
 
-    action_id = f"{state.day}:vip-push:{state.win_streak}"
+    action_id = f"{state.day}:vip-push:{state.channel_win_streak}"
     if state.was_executed(action_id):
         return
 
@@ -367,38 +404,68 @@ async def _maybe_post_follow_instructions(
     if state.was_executed(action_id):
         return
 
-    await _send_message(client, config.channel, build_follow_instructions_message())
+    await _send_message(
+        client, config.channel, build_follow_instructions_message(AUDIENCE_CHANNEL)
+    )
     state.mark_executed(action_id)
     save_state(config.state_path, state)
     logger.info("Follow instructions sent.")
 
 
-async def _maybe_post_conversion(
+async def _ensure_vip_onboarding(
     client: TelegramClient,
     config: AppConfig,
     state: BotState,
     logger: logging.Logger,
-    tz: ZoneInfo,
+    vip_target: object,
+) -> None:
+    if not state.vip_welcome_sent:
+        await _send_message(client, vip_target, build_vip_welcome_message())
+        state.vip_welcome_sent = True
+        save_state(config.state_path, state)
+        logger.info("VIP welcome message sent.")
+
+    if not state.vip_rules_sent:
+        await _send_message(client, vip_target, build_vip_rules_message())
+        state.vip_rules_sent = True
+        save_state(config.state_path, state)
+        logger.info("VIP rules message sent.")
+
+    if not state.vip_follow_pinned:
+        message = await _send_message(client, vip_target, build_vip_follow_message())
+        try:
+            await client.pin_message(vip_target, message, notify=False)
+            logger.info("VIP follow message pinned.")
+        except Exception as exc:
+            logger.warning("Failed to pin VIP follow message: %s", exc)
+        state.vip_follow_pinned = True
+        save_state(config.state_path, state)
+
+
+async def _maybe_post_conversion_after_win(
+    client: TelegramClient,
+    config: AppConfig,
+    state: BotState,
+    logger: logging.Logger,
+    today: date,
+    session_name: str,
+    result: str,
 ) -> None:
     if state.conversion_posted:
         return
-
-    now = datetime.now(tz)
-    conversion_dt = datetime.combine(now.date(), config.conversion_time, tzinfo=tz)
-    if now < conversion_dt:
+    if result.upper() != "WIN":
         return
 
-    action_id = f"{state.day}:conversion"
+    action_id = f"{state.day}:{session_name}:conversion"
     if state.was_executed(action_id):
-        state.conversion_posted = True
         return
 
-    message = _conversion_message_for_day(now.date())
+    message = _conversion_message_for_day(today)
     await _send_message(client, config.channel, message)
     state.mark_executed(action_id)
     state.conversion_posted = True
     save_state(config.state_path, state)
-    logger.info("Conversion post sent.")
+    logger.info("Conversion post sent after channel win.")
 
 
 async def _maybe_post_daily_recap(
@@ -411,14 +478,22 @@ async def _maybe_post_daily_recap(
     if state.was_executed(action_id):
         return
 
-    stats = RecapStats(total=state.daily.total, wins=state.daily.wins, losses=state.daily.losses)
+    stats = RecapStats(
+        total=state.channel_daily.total,
+        wins=state.channel_daily.wins,
+        losses=state.channel_daily.losses,
+    )
     example = _profit_example(
         stats,
         config.example_start_balance,
         config.example_risk_per_trade,
         config.payout_ratio,
     )
-    await _send_message(client, config.channel, build_daily_recap_message(stats, example))
+    await _send_message(
+        client,
+        config.channel,
+        build_daily_recap_message(stats, example, AUDIENCE_CHANNEL),
+    )
     state.mark_executed(action_id)
     save_state(config.state_path, state)
     logger.info("Daily recap sent.")
@@ -435,13 +510,15 @@ async def _maybe_post_session_recap(
     if state.was_executed(action_id):
         return
 
-    stats = state.session_stats.get(session_name)
+    stats = state.channel_session_stats.get(session_name)
     if not stats or stats.total <= 0:
         return
 
     recap = RecapStats(total=stats.total, wins=stats.wins, losses=stats.losses)
     await _send_message(
-        client, config.channel, build_session_recap_message(session_name, recap)
+        client,
+        config.channel,
+        build_session_recap_message(session_name, recap, AUDIENCE_CHANNEL),
     )
     state.mark_executed(action_id)
     save_state(config.state_path, state)
@@ -462,9 +539,17 @@ async def _maybe_post_weekly_recap(
     if state.was_executed(action_id):
         return
 
-    stats = RecapStats(total=state.weekly.total, wins=state.weekly.wins, losses=state.weekly.losses)
+    stats = RecapStats(
+        total=state.channel_weekly.total,
+        wins=state.channel_weekly.wins,
+        losses=state.channel_weekly.losses,
+    )
     examples = _weekly_examples(config, stats)
-    await _send_message(client, config.channel, build_weekly_recap_message(stats, examples))
+    await _send_message(
+        client,
+        config.channel,
+        build_weekly_recap_message(stats, examples, AUDIENCE_CHANNEL),
+    )
     state.mark_executed(action_id)
     save_state(config.state_path, state)
     logger.info("Weekly recap sent.")
@@ -480,7 +565,7 @@ async def _maybe_send_proof(
     example: ProfitExample,
     tz: ZoneInfo,
     vip_target: object | None,
-    send_to_channel: bool,
+    send_channel_proof: bool,
 ) -> None:
     sent_at = state.get_signal_sent_at(signal_key) or scheduled_at
     if sent_at.tzinfo is None:
@@ -503,7 +588,7 @@ async def _maybe_send_proof(
     if not proof_path:
         return
     try:
-        if send_to_channel:
+        if send_channel_proof:
             await client.send_file(config.channel, proof_path)
         if vip_target is not None:
             await client.send_file(vip_target, proof_path)
@@ -523,7 +608,6 @@ async def _post_end_of_day_actions(
     today: date,
 ) -> None:
     actions: list[tuple[datetime, str]] = [
-        (datetime.combine(today, config.conversion_time, tzinfo=tz), "conversion"),
         (datetime.combine(today, config.daily_recap_time, tzinfo=tz), "daily"),
     ]
     if today.weekday() == 6:
@@ -532,9 +616,7 @@ async def _post_end_of_day_actions(
     actions.sort(key=lambda item: item[0])
     for scheduled_at, name in actions:
         await _wait_until(scheduled_at, tz)
-        if name == "conversion":
-            await _maybe_post_conversion(client, config, state, logger, tz)
-        elif name == "daily":
+        if name == "daily":
             await _maybe_post_daily_recap(client, config, state, logger)
         else:
             await _maybe_post_weekly_recap(client, config, state, logger, today)
@@ -588,7 +670,9 @@ def _profit_value(result: str, win_profit: str, loss_cost: str) -> float:
         return 0.0
 
 
-def _update_stats_after_result(state: BotState, session_name: str, result: str) -> None:
+def _update_stats_after_result(
+    state: BotState, session_name: str, result: str, send_to_channel: bool
+) -> None:
     state.daily.record(result)
     state.weekly.record(result)
     state.session_stats.setdefault(session_name, Stats()).record(result)
@@ -597,10 +681,19 @@ def _update_stats_after_result(state: BotState, session_name: str, result: str) 
         state.session_loss_streak[session_name] = 0
     else:
         state.win_streak = 0
-        state.vip_push_posted_for_streak = False
         state.session_loss_streak[session_name] = state.session_loss_streak.get(session_name, 0) + 1
         if state.session_loss_streak[session_name] >= 2:
             state.session_stopped[session_name] = True
+
+    if send_to_channel:
+        state.channel_daily.record(result)
+        state.channel_weekly.record(result)
+        state.channel_session_stats.setdefault(session_name, Stats()).record(result)
+        if result.upper() == "WIN":
+            state.channel_win_streak += 1
+        else:
+            state.channel_win_streak = 0
+            state.vip_push_posted_for_streak = False
 
 
 async def _wait_until(target: datetime, tz: ZoneInfo) -> None:
@@ -626,6 +719,9 @@ async def _run_mode_once(
     today = now.date()
     week_id = _week_id(today)
     state = load_state(config.state_path, today.isoformat(), week_id)
+
+    if vip_target is not None and mode in {"day", "morning", "evening"}:
+        await _ensure_vip_onboarding(client, config, state, logger, vip_target)
 
     if mode in {"morning", "evening"}:
         if config.auto_plan:
@@ -663,12 +759,9 @@ async def _post_actions_if_due(
     today: date,
 ) -> None:
     now = datetime.now(tz)
-    conversion_dt = datetime.combine(today, config.conversion_time, tzinfo=tz)
     daily_dt = datetime.combine(today, config.daily_recap_time, tzinfo=tz)
     weekly_dt = datetime.combine(today, config.weekly_recap_time, tzinfo=tz)
 
-    if now >= conversion_dt:
-        await _maybe_post_conversion(client, config, state, logger, tz)
     if now >= daily_dt:
         await _maybe_post_daily_recap(client, config, state, logger)
     if today.weekday() == 6 and now >= weekly_dt:

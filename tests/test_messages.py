@@ -1,4 +1,9 @@
-﻿from ghost.messages import ProfitExample, build_result_message, build_signal_message
+﻿from ghost.messages import (
+    AUDIENCE_CHANNEL,
+    ProfitExample,
+    build_result_message,
+    build_signal_message,
+)
 from ghost.plan import (
     DEFAULT_ASSET,
     DEFAULT_CONFIDENCE,
@@ -28,7 +33,7 @@ def _sample_signal(result: str = "WIN") -> SignalPlan:
 
 def test_build_signal_message_contains_direction() -> None:
     signal = _sample_signal()
-    message = build_signal_message(signal)
+    message = build_signal_message(signal, AUDIENCE_CHANNEL)
     assert signal.direction in message
     assert signal.asset in message
 
@@ -42,5 +47,5 @@ def test_build_result_message_win_loss() -> None:
         loss_cost="10",
         net_profit="8",
     )
-    assert "Result: WIN" in build_result_message(signal, "WIN", example)
-    assert "Result: LOSS" in build_result_message(signal, "LOSS", example)
+    assert "Result: WIN" in build_result_message(signal, "WIN", example, AUDIENCE_CHANNEL)
+    assert "Result: LOSS" in build_result_message(signal, "LOSS", example, AUDIENCE_CHANNEL)
