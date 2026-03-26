@@ -148,14 +148,14 @@ CONVERSION_TRIAL = (
     "🤔 Not sure yet?\n\n"
     "Test VIP for 24H (only $10).\n\n"
     "See it for yourself, then decide.\n\n"
-    'VIP trial available: "TRIAL" 💬'
+    "VIP spots are filling up too fast, don't sleep on this opportunity"
 )
 
 CONVERSION_SCARCITY = (
     "⚠️ VIP spots are filling up.\n\n"
     "We keep the group small to maintain quality.\n\n"
     "When it’s full, we close access.\n\n"
-    "Availability changes quickly."
+    "this may be your last opportunity, join us and change your life"
 )
 
 

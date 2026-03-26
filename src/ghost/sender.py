@@ -270,11 +270,10 @@ async def _run_session(
                 config.example_risk_per_trade,
                 config.payout_ratio,
             )
-            await _send_message(
-                client,
-                config.channel,
-                build_result_message(signal, signal.result, example),
-            )
+            result_message = build_result_message(signal, signal.result, example)
+            await _send_message(client, config.channel, result_message)
+            if vip_target is not None:
+                await _send_message(client, vip_target, result_message)
             state.mark_executed(result_id)
             _update_stats_after_result(state, session_name, signal.result)
             await _maybe_post_vip_push(client, config, state, logger)
