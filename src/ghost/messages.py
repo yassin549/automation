@@ -11,8 +11,8 @@ class RecapStats:
 
 
 PRE_SESSION_MESSAGE = (
-    "🕒 We're live for this session.\n\n"
-    "Signals will drop during this window. Keep alerts on."
+    "🕒 We're live for this session. 👋\n\n"
+    "Signals will drop during this window. Keep alerts on. 🔔"
 )
 
 

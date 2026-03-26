@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 import random
 
@@ -108,6 +109,28 @@ def render_proof_image(
 
 def _format_time(timestamp: datetime) -> str:
     return f"{timestamp:%H:%M:%S}.{timestamp.microsecond // 1000:03d}"
+
+
+@lru_cache(maxsize=8)
+def _load_font(size: int) -> ImageFont.ImageFont:
+    candidates = [
+        Path(__file__).with_name("assets") / "Inter-Regular.ttf",
+        Path(__file__).with_name("assets") / "Inter-SemiBold.ttf",
+    ]
+    for path in candidates:
+        if path.exists():
+            try:
+                return ImageFont.truetype(str(path), size=size)
+            except OSError:
+                pass
+
+    for name in ("DejaVuSans.ttf", "Arial.ttf"):
+        try:
+            return ImageFont.truetype(name, size=size)
+        except OSError:
+            continue
+
+    return ImageFont.load_default()
 
 
 def _format_currency(value: str) -> str:

@@ -179,6 +179,8 @@ async def _run_session(
         if datetime.now(tz) <= start_dt + timedelta(seconds=config.max_late_seconds):
             await _wait_until(start_dt, tz)
             await _send_message(client, config.channel, PRE_SESSION_MESSAGE)
+            if vip_target is not None:
+                await _send_message(client, vip_target, PRE_SESSION_MESSAGE)
             state.mark_executed(pre_id)
             state.session_loss_streak[session_name] = 0
             state.session_stopped[session_name] = False
