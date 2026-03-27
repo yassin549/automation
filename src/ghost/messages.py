@@ -46,14 +46,14 @@ def build_pre_session_message(audience: str) -> str:
 def build_signal_message(signal: "SignalLike", audience: str = AUDIENCE_CHANNEL) -> str:
     return (
         "🚨 New signal\n\n"
-        f"Setup: {signal.asset} — {signal.direction}\n"
+        f"Setup: {signal.asset} — {signal.direction} 🎯\n"
         f"Expiry: {signal.expiry}\n"
         f"Entry window: {signal.entry_window}\n\n"
         f"Confidence: {signal.confidence}%\n"
         f"Market: {signal.market_condition}\n"
-        f"Insight: {signal.insight}\n\n"
+        f"Insight: {signal.insight} 🧠\n\n"
         "If the entry window passes, skip it and wait for the next setup.\n\n"
-        "Copy the code below and paste it inside the website.\n\n"
+        "Copy the code below and paste it inside the website. 🧩\n\n"
         "Why: this setup is only valid inside the entry window.\n\n"
         f"{_promo_block(audience)}"
     )
@@ -119,14 +119,14 @@ def build_vip_push_message() -> str:
 def build_vip_signal_message(signal: "SignalLike") -> str:
     return (
         "👑 VIP signal\n\n"
-        f"Setup: {signal.asset} — {signal.direction}\n"
+        f"Setup: {signal.asset} — {signal.direction} 🎯\n"
         f"Expiry: {signal.expiry}\n"
         f"Entry window: {signal.entry_window}\n"
         f"Entry: {signal.entry}\n\n"
         f"Confidence: {signal.confidence}%\n"
         f"Market: {signal.market_condition}\n"
-        f"Insight: {signal.insight}\n\n"
-        "Copy the code below and paste it inside the website.\n\n"
+        f"Insight: {signal.insight} 🧠\n\n"
+        "Copy the code below and paste it inside the website. 🧩\n\n"
         "Why: VIP gets full details and fastest entries.\n\n"
         f"{_promo_block(AUDIENCE_VIP)}"
     )
@@ -144,13 +144,13 @@ def build_free_delayed_message(signal: "SignalLike", vip_extra_count: int) -> st
         "⏳ Free signal (delayed)\n\n"
         "VIP received this earlier.\n\n"
         f"{extra_line}"
-        f"Setup: {_short_asset(signal.asset)} — {signal.direction}\n"
+        f"Setup: {_short_asset(signal.asset)} — {signal.direction} 🎯\n"
         f"Expiry: {signal.expiry}\n"
         f"Entry window: {signal.entry_window}\n"
         f"Confidence: {signal.confidence}%\n"
         f"Market: {signal.market_condition}\n"
-        f"Insight: {signal.insight}\n\n"
-        "Copy the code below and paste it inside the website.\n\n"
+        f"Insight: {signal.insight} 🧠\n\n"
+        "Copy the code below and paste it inside the website. 🧩\n\n"
         "If the entry window already passed, skip this one.\n\n"
         "Why: free signals are delayed to protect VIP speed.\n\n"
         f"{_promo_block(AUDIENCE_CHANNEL)}"
@@ -313,7 +313,7 @@ def build_follow_instructions_message(audience: str = AUDIENCE_CHANNEL) -> str:
 def build_vip_welcome_message() -> str:
     return (
         "👑 Welcome to VIP!\n\n"
-        "You’ll get early entries, full details, and priority support. 🚀\n\n"
+        "You'll get early entries, full details, and priority support. 🚀\n\n"
         "Why: the edge is speed + clean execution.\n\n"
         f"{_promo_block(AUDIENCE_VIP)}"
     )
@@ -354,11 +354,11 @@ def build_channel_promo_message(seed: str) -> str:
     lines = [
         _pick_line(CHANNEL_PROMO_HEADERS, seed + ":header"),
         "",
-        intro,
+        f"{intro} 🔔",
         "",
         cta,
         "",
-        f"Official platform: {WEBSITE_URL}",
+        f"Official platform: {WEBSITE_URL} 🌐",
     ]
     return "\n".join(lines)
 
@@ -368,9 +368,9 @@ def build_vip_promo_message(seed: str) -> str:
     lines = [
         _pick_line(VIP_PROMO_HEADERS, seed + ":header"),
         "",
-        motivation,
+        f"{motivation} 🔥",
         "",
-        f"Official platform: {WEBSITE_URL}",
+        f"Official platform: {WEBSITE_URL} 🌐",
     ]
     return "\n".join(lines)
 
