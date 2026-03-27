@@ -16,6 +16,7 @@ on:
         default: "morning"
         type: choice
         options:
+          - all
           - morning
           - evening
           - recap
