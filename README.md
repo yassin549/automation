@@ -88,7 +88,7 @@ python -m ghost.cli --once
 - `--vip-channel @vipchannel`: send VIP signals first and delayed free signals after
 - `--auto-plan`: generate random directions with a win-rate bias
 - `--auto-win-rate 0.9`: win rate for auto plan (0–1)
-- `--mode day|morning|evening|recap`: run a specific schedule slice (default `day`)
+- `--mode all|day|morning|evening|recap`: run a specific schedule slice (default `day`)
 - `--result-delay 75`: seconds before posting result
 - `--free-delay 150`: seconds to delay free signals after VIP
 - `--daily-recap-time 18:00`: recap time in Tunisia time

@@ -53,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--once", action="store_true", help="Run one day and exit.")
     parser.add_argument(
         "--mode",
-        choices=["day", "morning", "evening", "recap"],
+        choices=["all", "day", "morning", "evening", "recap"],
         default="day",
         help="Run mode (default: day).",
     )

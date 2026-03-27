@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
@@ -27,6 +28,8 @@ from .messages import (
     build_result_message,
     build_session_recap_message,
     build_signal_message,
+    build_channel_promo_message,
+    build_vip_promo_message,
     build_vip_push_message,
     build_vip_signal_message,
     build_vip_welcome_message,
@@ -46,9 +49,22 @@ from .promo import generate_promo_code
 from .proof import format_profit_text, load_proof_dir, render_proof_image
 from .state import BotState, Stats, load_state, save_state
 
-VIP_SIGNALS_PER_SESSION = 3
+VIP_SIGNALS_PER_SESSION = 5
 CHANNEL_SIGNALS_PER_SESSION = 1
 FOLLOW_INSTRUCTIONS_EVERY = 4
+PROMO_INTERVAL_HOURS = 2
+PROMO_CHECK_INTERVAL_SECONDS = 60
+
+
+@dataclass(frozen=True)
+class PromoContext:
+    client: TelegramClient
+    config: AppConfig
+    state: BotState
+    logger: logging.Logger
+    tz: ZoneInfo
+    vip_target: object | None
+    enabled: bool = True
 
 
 async def run_sender(
@@ -83,12 +99,21 @@ async def run_sender(
         if config.vip_channel and mode in {"day", "morning", "evening"}:
             vip_target = await _resolve_vip_target(client, config.vip_channel, logger)
 
-        if mode == "day":
+        if mode in {"day", "all"}:
             while True:
                 now = datetime.now(tz)
                 today = now.date()
                 week_id = _week_id(today)
                 state = load_state(config.state_path, today.isoformat(), week_id)
+                promo = PromoContext(
+                    client=client,
+                    config=config,
+                    state=state,
+                    logger=logger,
+                    tz=tz,
+                    vip_target=vip_target,
+                    enabled=True,
+                )
 
                 if config.auto_plan:
                     plan = generate_plan(today, config.auto_win_rate)
@@ -104,13 +129,15 @@ async def run_sender(
                         logger.error("Plan error: %s", exc)
                         if once:
                             return
-                        await asyncio.sleep(60)
+                        await _wait_until(
+                            datetime.now(tz) + timedelta(seconds=60), tz, promo
+                        )
                         continue
 
                 if vip_target is not None:
                     await _ensure_vip_onboarding(client, config, state, logger, vip_target)
 
-                await _run_day(client, config, plan, state, logger, tz, vip_target)
+                await _run_day(client, config, plan, state, logger, tz, vip_target, promo)
 
                 if once:
                     return
@@ -119,13 +146,8 @@ async def run_sender(
                 next_day = datetime.combine(
                     now.date() + timedelta(days=1), time(0, 0), tzinfo=tz
                 )
-                sleep_for = max(0, (next_day - now).total_seconds())
-                logger.info(
-                    "Day complete. Sleeping %.0f seconds until %s.",
-                    sleep_for,
-                    next_day,
-                )
-                await asyncio.sleep(sleep_for)
+                logger.info("Day complete. Sleeping until %s.", next_day)
+                await _wait_until(next_day, tz, promo)
         else:
             await _run_mode_once(client, config, logger, tz, vip_target, mode)
     finally:
@@ -141,18 +163,39 @@ async def _run_day(
     logger: logging.Logger,
     tz: ZoneInfo,
     vip_target: object | None,
+    promo: PromoContext | None,
 ) -> None:
     today = datetime.now(tz).date()
 
     await _run_session(
-        client, config, plan, state, logger, tz, today, "morning", vip_target
+        client,
+        config,
+        plan,
+        state,
+        logger,
+        tz,
+        today,
+        "morning",
+        vip_target,
+        promo,
     )
 
     await _run_session(
-        client, config, plan, state, logger, tz, today, "evening", vip_target
+        client,
+        config,
+        plan,
+        state,
+        logger,
+        tz,
+        today,
+        "evening",
+        vip_target,
+        promo,
     )
 
-    await _post_end_of_day_actions(client, config, state, logger, tz, today, vip_target)
+    await _post_end_of_day_actions(
+        client, config, state, logger, tz, today, vip_target, promo
+    )
 
 
 async def _run_session(
@@ -165,6 +208,7 @@ async def _run_session(
     today: date,
     session_name: str,
     vip_target: object | None,
+    promo: PromoContext | None,
 ) -> None:
     signals = plan.sessions[session_name]
     if vip_target is not None:
@@ -189,7 +233,7 @@ async def _run_session(
     pre_vip_done = vip_target is None or state.was_executed(pre_vip_id)
     if not (pre_channel_done and pre_vip_done):
         if datetime.now(tz) <= start_dt + timedelta(seconds=config.max_late_seconds):
-            await _wait_until(start_dt, tz)
+            await _wait_until(start_dt, tz, promo)
             pre_sent = False
             if vip_target is not None and not state.was_executed(pre_vip_id):
                 await _send_message(
@@ -226,7 +270,7 @@ async def _run_session(
             logger.warning("Skipping late signal %s in %s session.", index + 1, session_name)
             continue
 
-        await _wait_until(scheduled_at, tz)
+        await _wait_until(scheduled_at, tz, promo)
 
         code = _ensure_signal_code(state, signal_key, config)
 
@@ -299,7 +343,7 @@ async def _run_session(
 
         result_id = f"{signal_key}:result"
         if not state.was_executed(result_id):
-            await _wait_for_result(state, signal_key, scheduled_at, config, tz)
+            await _wait_for_result(state, signal_key, scheduled_at, config, tz, promo)
             example_stats = RecapStats(
                 total=1,
                 wins=1 if signal.result.upper() == "WIN" else 0,
@@ -369,12 +413,13 @@ async def _wait_for_result(
     scheduled_at: datetime,
     config: AppConfig,
     tz: ZoneInfo,
+    promo: PromoContext | None,
 ) -> None:
     sent_at = state.get_signal_sent_at(signal_key) or scheduled_at
     if sent_at.tzinfo is None:
         sent_at = sent_at.replace(tzinfo=tz)
     result_at = sent_at + timedelta(seconds=config.result_delay_seconds)
-    await _wait_until(result_at, tz)
+    await _wait_until(result_at, tz, promo)
 
 
 async def _maybe_post_vip_push(
@@ -720,6 +765,7 @@ async def _post_end_of_day_actions(
     tz: ZoneInfo,
     today: date,
     vip_target: object | None,
+    promo: PromoContext | None,
 ) -> None:
     actions: list[tuple[datetime, str]] = [
         (datetime.combine(today, config.daily_recap_time, tzinfo=tz), "daily"),
@@ -729,7 +775,7 @@ async def _post_end_of_day_actions(
 
     actions.sort(key=lambda item: item[0])
     for scheduled_at, name in actions:
-        await _wait_until(scheduled_at, tz)
+        await _wait_until(scheduled_at, tz, promo)
         if name == "daily":
             await _maybe_post_daily_recap(client, config, state, logger)
             await _maybe_post_vip_daily_recap(client, config, state, logger, vip_target)
@@ -823,11 +869,66 @@ def _update_stats_after_result(
         state.vip_session_stats.setdefault(session_name, Stats()).record(result)
 
 
-async def _wait_until(target: datetime, tz: ZoneInfo) -> None:
-    now = datetime.now(tz)
-    if target <= now:
+def _promo_slot(now: datetime) -> tuple[int, datetime]:
+    slot_hour = (now.hour // PROMO_INTERVAL_HOURS) * PROMO_INTERVAL_HOURS
+    slot_time = datetime.combine(
+        now.date(), time(slot_hour, 0), tzinfo=now.tzinfo
+    )
+    return slot_hour, slot_time
+
+
+async def _maybe_post_promos(promo: PromoContext) -> None:
+    if not promo.enabled:
         return
-    await asyncio.sleep((target - now).total_seconds())
+
+    now = datetime.now(promo.tz)
+    if promo.state.day != now.date().isoformat():
+        return
+
+    slot_hour, slot_time = _promo_slot(now)
+    if now < slot_time:
+        return
+
+    slot_key = f"{promo.state.day}:promo:{slot_hour:02d}"
+    channel_id = f"{slot_key}:channel"
+    if not promo.state.was_executed(channel_id):
+        await _send_message(
+            promo.client,
+            promo.config.channel,
+            build_channel_promo_message(slot_key),
+        )
+        promo.state.mark_executed(channel_id)
+        save_state(promo.config.state_path, promo.state)
+        promo.logger.info("Channel promo sent for slot %02d.", slot_hour)
+
+    if promo.vip_target is None:
+        return
+
+    vip_id = f"{slot_key}:vip"
+    if promo.state.was_executed(vip_id):
+        return
+
+    await _send_message(
+        promo.client,
+        promo.vip_target,
+        build_vip_promo_message(slot_key),
+    )
+    promo.state.mark_executed(vip_id)
+    save_state(promo.config.state_path, promo.state)
+    promo.logger.info("VIP promo sent for slot %02d.", slot_hour)
+
+
+async def _wait_until(
+    target: datetime, tz: ZoneInfo, promo: PromoContext | None = None
+) -> None:
+    while True:
+        now = datetime.now(tz)
+        if promo is not None:
+            await _maybe_post_promos(promo)
+        if target <= now:
+            return
+        sleep_for = min(PROMO_CHECK_INTERVAL_SECONDS, (target - now).total_seconds())
+        await asyncio.sleep(sleep_for)
 
 
 async def _send_message(client: TelegramClient, channel: object, message: str):
@@ -866,7 +967,7 @@ async def _run_mode_once(
                 return
 
         await _run_session(
-            client, config, plan, state, logger, tz, today, mode, vip_target
+            client, config, plan, state, logger, tz, today, mode, vip_target, None
         )
         return
 

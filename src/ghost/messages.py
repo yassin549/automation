@@ -268,6 +268,31 @@ PROMO_LINES = [
     "Upgrade to VIP for early entries and fewer delays.",
 ]
 
+CHANNEL_PROMO_LINES = [
+    "VIP gets the earliest entries and the full breakdown on every setup.",
+    "If you want full context and earlier entries, VIP is where it's sent.",
+    "Serious about execution? VIP members get the first alerts and full details.",
+    "VIP delivers the earliest entries plus the full market context.",
+]
+
+CHANNEL_PROMO_CTA = [
+    'To join VIP or start a trial, message "VIP" or "TRIAL".',
+    'Interested in VIP access? Message "VIP" or "TRIAL".',
+    'Want VIP access? Message "VIP" or "TRIAL".',
+]
+
+CHANNEL_PROMO_HEADERS = [
+    "VIP update",
+    "VIP access",
+    "VIP note",
+]
+
+VIP_PROMO_HEADERS = [
+    "Reminder",
+    "Desk note",
+    "Heads-up",
+]
+
 
 def build_follow_instructions_message(audience: str = AUDIENCE_CHANNEL) -> str:
     lines = [
@@ -319,6 +344,33 @@ def build_vip_follow_message() -> str:
         "Why: the code links the signal to the correct entry.",
         "",
         _promo_block(AUDIENCE_VIP),
+    ]
+    return "\n".join(lines)
+
+
+def build_channel_promo_message(seed: str) -> str:
+    intro = _pick_line(CHANNEL_PROMO_LINES, seed)
+    cta = _pick_line(CHANNEL_PROMO_CTA, seed + ":cta")
+    lines = [
+        _pick_line(CHANNEL_PROMO_HEADERS, seed + ":header"),
+        "",
+        intro,
+        "",
+        cta,
+        "",
+        f"Official platform: {WEBSITE_URL}",
+    ]
+    return "\n".join(lines)
+
+
+def build_vip_promo_message(seed: str) -> str:
+    motivation = _pick_line(MOTIVATION_LINES, seed + ":motivation")
+    lines = [
+        _pick_line(VIP_PROMO_HEADERS, seed + ":header"),
+        "",
+        motivation,
+        "",
+        f"Official platform: {WEBSITE_URL}",
     ]
     return "\n".join(lines)
 
