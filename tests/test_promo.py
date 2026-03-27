@@ -14,6 +14,8 @@ def test_load_plan_defaults(tmp_path):
                 {"direction": "PUT", "result": "WIN"},
                 {"direction": "PUT", "result": "WIN"},
                 {"direction": "PUT", "result": "LOSS"},
+                {"direction": "CALL", "result": "WIN"},
+                {"direction": "CALL", "result": "LOSS"},
             ],
             "evening": [
                 {"direction": "CALL", "result": "WIN"},
