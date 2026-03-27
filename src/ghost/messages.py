@@ -31,14 +31,14 @@ def build_pre_session_message(audience: str) -> str:
         return (
             "👑 VIP session is live.\n\n"
             "Full signals start now. Stay sharp. ⚡\n\n"
-            "Why: entries are time-sensitive, so alerts matter.\n\n"
+            "entries are time-sensitive, so alerts matter.\n\n"
             f"{_promo_block(audience)}"
         )
     return (
         "🕒 Session is live.\n\n"
         "Sample signals will appear during this window.\n"
         "VIP gets early entries. 🔔\n\n"
-        "Why: signals are only valid inside this session window.\n\n"
+        "signals are only valid inside this session window.\n\n"
         f"{_promo_block(audience)}"
     )
 
@@ -54,7 +54,7 @@ def build_signal_message(signal: "SignalLike", audience: str = AUDIENCE_CHANNEL)
         f"Insight: {signal.insight} 🧠\n\n"
         "If the entry window passes, skip it and wait for the next setup.\n\n"
         "Copy the code below and paste it inside the website. 🧩\n\n"
-        "Why: this setup is only valid inside the entry window.\n\n"
+        "this setup is only valid inside the entry window.\n\n"
         f"{_promo_block(audience)}"
     )
 
@@ -98,7 +98,7 @@ def build_result_message(
     lines.extend(
         [
             "",
-            "Why: we publish every outcome for transparency.",
+            "we publish every outcome for transparency.",
             "",
             _promo_block(audience),
         ]
@@ -111,7 +111,7 @@ def build_vip_push_message() -> str:
         "🔥 Two wins in a row.\n\n"
         "VIP members got the earlier entries.\n"
         "Free signals arrive with a delay.\n\n"
-        "Why: speed matters on these entries.\n\n"
+        "speed matters on these entries.\n\n"
         f"{_promo_block(AUDIENCE_CHANNEL)}"
     )
 
@@ -127,7 +127,7 @@ def build_vip_signal_message(signal: "SignalLike") -> str:
         f"Market: {signal.market_condition}\n"
         f"Insight: {signal.insight} 🧠\n\n"
         "Copy the code below and paste it inside the website. 🧩\n\n"
-        "Why: VIP gets full details and fastest entries.\n\n"
+        "VIP gets full details and fastest entries.\n\n"
         f"{_promo_block(AUDIENCE_VIP)}"
     )
 
@@ -152,7 +152,7 @@ def build_free_delayed_message(signal: "SignalLike", vip_extra_count: int) -> st
         f"Insight: {signal.insight} 🧠\n\n"
         "Copy the code below and paste it inside the website. 🧩\n\n"
         "If the entry window already passed, skip this one.\n\n"
-        "Why: free signals are delayed to protect VIP speed.\n\n"
+        "free signals are delayed to protect VIP speed.\n\n"
         f"{_promo_block(AUDIENCE_CHANNEL)}"
     )
 
@@ -174,7 +174,7 @@ def build_daily_recap_message(
         f"Losses: -${example.loss_cost}\n\n"
         f"Net: {_signed_money(example.net_profit)}\n\n"
         "Thanks for trading with us today. 🙏\n\n"
-        "Why: recaps keep results clear and consistent.\n\n"
+        "recaps keep results clear and consistent.\n\n"
         f"{_promo_block(audience)}"
     )
 
@@ -201,7 +201,7 @@ def build_weekly_recap_message(
         [
             "Thanks for a solid week. ✅",
             "",
-            "Why: weekly recaps show the bigger picture.",
+            "weekly recaps show the bigger picture.",
             "",
             _promo_block(audience),
         ]
@@ -220,7 +220,7 @@ def build_session_recap_message(
         f"Wins: {stats.wins} ✅\n"
         f"Losses: {stats.losses} ❌\n"
         f"Win rate: {win_rate}%\n\n"
-        "Why: session recaps help you stay disciplined.\n\n"
+        "session recaps help you stay disciplined.\n\n"
         f"{_promo_block(audience)}"
     )
 
@@ -228,21 +228,21 @@ def build_session_recap_message(
 CONVERSION_SOFT = (
     "👋 Thinking about VIP?\n\n"
     "VIP members get earlier entries, full details, and priority support.\n\n"
-    "Why: speed + detail = better execution.\n\n"
+    "speed + detail = better execution.\n\n"
     f"{_promo_block(AUDIENCE_CHANNEL)}"
 )
 
 CONVERSION_TRIAL = (
     "🧪 Want to try VIP first?\n\n"
     "Grab a 24h trial for $10 and see the difference.\n\n"
-    "Why: the trial shows you the speed and details.\n\n"
+    "the trial shows you the speed and details.\n\n"
     f"{_promo_block(AUDIENCE_CHANNEL)}"
 )
 
 CONVERSION_SCARCITY = (
     "⚠️ VIP spots are limited.\n\n"
     "We keep the group small so entries stay fast and support stays responsive.\n\n"
-    "Why: smaller groups keep entries clean.\n\n"
+    "smaller groups keep entries clean.\n\n"
     f"{_promo_block(AUDIENCE_CHANNEL)}"
 )
 
@@ -303,7 +303,7 @@ def build_follow_instructions_message(audience: str = AUDIENCE_CHANNEL) -> str:
         "",
         "⚠️ Signals only work properly on our platform.",
         "",
-        "Why: matching the platform keeps entries consistent.",
+        "matching the platform keeps entries consistent.",
         "",
         _promo_block(audience),
     ]
@@ -314,7 +314,7 @@ def build_vip_welcome_message() -> str:
     return (
         "👑 Welcome to VIP!\n\n"
         "You'll get early entries, full details, and priority support. 🚀\n\n"
-        "Why: the edge is speed + clean execution.\n\n"
+        "the edge is speed + clean execution.\n\n"
         f"{_promo_block(AUDIENCE_VIP)}"
     )
 
@@ -327,7 +327,7 @@ def build_vip_rules_message() -> str:
         "3. Skip late entries — wait for the next setup.",
         "4. Keep risk per trade consistent.",
         "",
-        "Why: consistency protects the edge.",
+        "consistency protects the edge.",
         "",
         _promo_block(AUDIENCE_VIP),
     ]
@@ -341,7 +341,7 @@ def build_vip_follow_message() -> str:
         "2. Match expiry, entry window, and direction exactly.",
         "3. Copy the code we send and paste it on the website.",
         "",
-        "Why: the code links the signal to the correct entry.",
+        "the code links the signal to the correct entry.",
         "",
         _promo_block(AUDIENCE_VIP),
     ]
