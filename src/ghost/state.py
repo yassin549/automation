@@ -32,6 +32,9 @@ class BotState:
     channel_daily: Stats = field(default_factory=Stats)
     channel_weekly: Stats = field(default_factory=Stats)
     channel_session_stats: dict[str, Stats] = field(default_factory=dict)
+    vip_daily: Stats = field(default_factory=Stats)
+    vip_weekly: Stats = field(default_factory=Stats)
+    vip_session_stats: dict[str, Stats] = field(default_factory=dict)
     channel_win_streak: int = 0
     win_streak: int = 0
     vip_push_posted_for_streak: bool = False
@@ -88,6 +91,9 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         channel_daily=_load_stats(data.get("channel_daily")),
         channel_weekly=_load_stats(data.get("channel_weekly")),
         channel_session_stats=_load_session_stats(data.get("channel_session_stats")),
+        vip_daily=_load_stats(data.get("vip_daily")),
+        vip_weekly=_load_stats(data.get("vip_weekly")),
+        vip_session_stats=_load_session_stats(data.get("vip_session_stats")),
         channel_win_streak=int(data.get("channel_win_streak", 0)),
         win_streak=int(data.get("win_streak", 0)),
         vip_push_posted_for_streak=bool(data.get("vip_push_posted_for_streak", False)),
@@ -117,6 +123,7 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         state.week = week_id
         state.weekly = Stats()
         state.channel_weekly = Stats()
+        state.vip_weekly = Stats()
 
     if state.day != today:
         state.day = today
@@ -134,6 +141,8 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         state.channel_win_streak = 0
         state.channel_session_stats.clear()
         state.channel_results_posted = 0
+        state.vip_daily = Stats()
+        state.vip_session_stats.clear()
 
     return state
 
@@ -149,6 +158,9 @@ def save_state(path: Path, state: BotState) -> None:
         "channel_daily": _dump_stats(state.channel_daily),
         "channel_weekly": _dump_stats(state.channel_weekly),
         "channel_session_stats": _dump_session_stats(state.channel_session_stats),
+        "vip_daily": _dump_stats(state.vip_daily),
+        "vip_weekly": _dump_stats(state.vip_weekly),
+        "vip_session_stats": _dump_session_stats(state.vip_session_stats),
         "channel_win_streak": state.channel_win_streak,
         "win_streak": state.win_streak,
         "vip_push_posted_for_streak": state.vip_push_posted_for_streak,

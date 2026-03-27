@@ -16,11 +16,11 @@ SESSION_WINDOWS: dict[str, tuple[time, time]] = {
 
 DEFAULT_ASSET = "EUR/USD (OTC)"
 DEFAULT_EXPIRY = "1 Minute"
-DEFAULT_ENTRY_WINDOW = "NOW – 10s"
+DEFAULT_ENTRY_WINDOW = "NOW - 10s"
 DEFAULT_ENTRY = "NOW"
 DEFAULT_CONFIDENCE = 85
 DEFAULT_MARKET_CONDITION = "Rejection Zone"
-DEFAULT_INSIGHT = "Liquidity sweep → bearish continuation"
+DEFAULT_INSIGHT = "Liquidity sweep -> bearish continuation"
 
 MIN_SIGNALS_PER_SESSION = 3
 MAX_SIGNALS_PER_SESSION = 5

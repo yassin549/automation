@@ -152,7 +152,7 @@ async def _run_day(
         client, config, plan, state, logger, tz, today, "evening", vip_target
     )
 
-    await _post_end_of_day_actions(client, config, state, logger, tz, today)
+    await _post_end_of_day_actions(client, config, state, logger, tz, today, vip_target)
 
 
 async def _run_session(
@@ -214,7 +214,6 @@ async def _run_session(
         channel_indexes = set(range(min(CHANNEL_SIGNALS_PER_SESSION, len(signals))))
     else:
         channel_indexes = set(range(len(signals)))
-    channel_first_index = min(channel_indexes) if channel_indexes else None
     vip_extra_count = max(0, len(signals) - len(channel_indexes)) if vip_target else 0
 
     for index, (signal, scheduled_at) in enumerate(zip(signals, schedule)):
@@ -343,15 +342,25 @@ async def _run_session(
                 example,
                 tz,
                 vip_target,
-                send_to_channel and index == channel_first_index,
+                send_to_channel,
             )
             state.mark_executed(result_id)
-            _update_stats_after_result(state, session_name, signal.result, send_to_channel)
+            _update_stats_after_result(
+                state,
+                session_name,
+                signal.result,
+                send_to_channel,
+                vip_target is not None,
+            )
             if send_to_channel:
                 await _maybe_post_vip_push(client, config, state, logger)
             save_state(config.state_path, state)
 
     await _maybe_post_session_recap(client, config, state, logger, session_name)
+    if vip_target is not None:
+        await _maybe_post_vip_session_recap(
+            client, config, state, logger, session_name, vip_target
+        )
 
 
 async def _wait_for_result(
@@ -499,6 +508,44 @@ async def _maybe_post_daily_recap(
     logger.info("Daily recap sent.")
 
 
+async def _maybe_post_vip_daily_recap(
+    client: TelegramClient,
+    config: AppConfig,
+    state: BotState,
+    logger: logging.Logger,
+    vip_target: object | None,
+) -> None:
+    if vip_target is None:
+        return
+
+    stats = RecapStats(
+        total=state.vip_daily.total,
+        wins=state.vip_daily.wins,
+        losses=state.vip_daily.losses,
+    )
+    if stats.total <= 0:
+        return
+
+    action_id = f"{state.day}:daily-recap:vip"
+    if state.was_executed(action_id):
+        return
+
+    example = _profit_example(
+        stats,
+        config.example_start_balance,
+        config.example_risk_per_trade,
+        config.payout_ratio,
+    )
+    await _send_message(
+        client,
+        vip_target,
+        build_daily_recap_message(stats, example, AUDIENCE_VIP),
+    )
+    state.mark_executed(action_id)
+    save_state(config.state_path, state)
+    logger.info("VIP daily recap sent.")
+
+
 async def _maybe_post_session_recap(
     client: TelegramClient,
     config: AppConfig,
@@ -523,6 +570,36 @@ async def _maybe_post_session_recap(
     state.mark_executed(action_id)
     save_state(config.state_path, state)
     logger.info("Session recap sent for %s.", session_name)
+
+
+async def _maybe_post_vip_session_recap(
+    client: TelegramClient,
+    config: AppConfig,
+    state: BotState,
+    logger: logging.Logger,
+    session_name: str,
+    vip_target: object | None,
+) -> None:
+    if vip_target is None:
+        return
+
+    stats = state.vip_session_stats.get(session_name)
+    if not stats or stats.total <= 0:
+        return
+
+    action_id = f"{state.day}:{session_name}:session-recap:vip"
+    if state.was_executed(action_id):
+        return
+
+    recap = RecapStats(total=stats.total, wins=stats.wins, losses=stats.losses)
+    await _send_message(
+        client,
+        vip_target,
+        build_session_recap_message(session_name, recap, AUDIENCE_VIP),
+    )
+    state.mark_executed(action_id)
+    save_state(config.state_path, state)
+    logger.info("VIP session recap sent for %s.", session_name)
 
 
 async def _maybe_post_weekly_recap(
@@ -553,6 +630,42 @@ async def _maybe_post_weekly_recap(
     state.mark_executed(action_id)
     save_state(config.state_path, state)
     logger.info("Weekly recap sent.")
+
+
+async def _maybe_post_vip_weekly_recap(
+    client: TelegramClient,
+    config: AppConfig,
+    state: BotState,
+    logger: logging.Logger,
+    today: date,
+    vip_target: object | None,
+) -> None:
+    if vip_target is None:
+        return
+    if today.weekday() != 6:
+        return
+
+    stats = RecapStats(
+        total=state.vip_weekly.total,
+        wins=state.vip_weekly.wins,
+        losses=state.vip_weekly.losses,
+    )
+    if stats.total <= 0:
+        return
+
+    action_id = f"{state.week}:weekly-recap:vip"
+    if state.was_executed(action_id):
+        return
+
+    examples = _weekly_examples(config, stats)
+    await _send_message(
+        client,
+        vip_target,
+        build_weekly_recap_message(stats, examples, AUDIENCE_VIP),
+    )
+    state.mark_executed(action_id)
+    save_state(config.state_path, state)
+    logger.info("VIP weekly recap sent.")
 
 
 async def _maybe_send_proof(
@@ -606,6 +719,7 @@ async def _post_end_of_day_actions(
     logger: logging.Logger,
     tz: ZoneInfo,
     today: date,
+    vip_target: object | None,
 ) -> None:
     actions: list[tuple[datetime, str]] = [
         (datetime.combine(today, config.daily_recap_time, tzinfo=tz), "daily"),
@@ -618,8 +732,12 @@ async def _post_end_of_day_actions(
         await _wait_until(scheduled_at, tz)
         if name == "daily":
             await _maybe_post_daily_recap(client, config, state, logger)
+            await _maybe_post_vip_daily_recap(client, config, state, logger, vip_target)
         else:
             await _maybe_post_weekly_recap(client, config, state, logger, today)
+            await _maybe_post_vip_weekly_recap(
+                client, config, state, logger, today, vip_target
+            )
 
 
 def _weekly_examples(config: AppConfig, stats: RecapStats) -> list[ProfitExample]:
@@ -671,7 +789,11 @@ def _profit_value(result: str, win_profit: str, loss_cost: str) -> float:
 
 
 def _update_stats_after_result(
-    state: BotState, session_name: str, result: str, send_to_channel: bool
+    state: BotState,
+    session_name: str,
+    result: str,
+    send_to_channel: bool,
+    send_to_vip: bool,
 ) -> None:
     state.daily.record(result)
     state.weekly.record(result)
@@ -694,6 +816,11 @@ def _update_stats_after_result(
         else:
             state.channel_win_streak = 0
             state.vip_push_posted_for_streak = False
+
+    if send_to_vip:
+        state.vip_daily.record(result)
+        state.vip_weekly.record(result)
+        state.vip_session_stats.setdefault(session_name, Stats()).record(result)
 
 
 async def _wait_until(target: datetime, tz: ZoneInfo) -> None:
@@ -744,7 +871,7 @@ async def _run_mode_once(
         return
 
     if mode == "recap":
-        await _post_actions_if_due(client, config, state, logger, tz, today)
+        await _post_actions_if_due(client, config, state, logger, tz, today, vip_target)
         return
 
     raise RuntimeError(f"Unknown mode: {mode}")
@@ -757,6 +884,7 @@ async def _post_actions_if_due(
     logger: logging.Logger,
     tz: ZoneInfo,
     today: date,
+    vip_target: object | None,
 ) -> None:
     now = datetime.now(tz)
     daily_dt = datetime.combine(today, config.daily_recap_time, tzinfo=tz)
@@ -764,8 +892,12 @@ async def _post_actions_if_due(
 
     if now >= daily_dt:
         await _maybe_post_daily_recap(client, config, state, logger)
+        await _maybe_post_vip_daily_recap(client, config, state, logger, vip_target)
     if today.weekday() == 6 and now >= weekly_dt:
         await _maybe_post_weekly_recap(client, config, state, logger, today)
+        await _maybe_post_vip_weekly_recap(
+            client, config, state, logger, today, vip_target
+        )
 
 
 async def _resolve_vip_target(
