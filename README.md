@@ -1,6 +1,6 @@
 ﻿# Ghost Signal Sender
 
-Telegram signal scheduler that enforces the daily structure you specified (pre-session, signals, results, VIP push, session recap, daily recap, weekly recap) on the Tunisia trading windows.
+Telegram signal scheduler that follows the current session flow (pre-session heads-up, trade promo, VIP-first signals with codes, delayed free signals, results + proof images, session recap, final push) on the Tunisia trading windows.
 
 **Requirements**
 - Python 3.11+
@@ -23,9 +23,20 @@ Optional:
 - Morning session: 09:00 – 11:00
 - Evening session: 15:30 – 17:30
 
+**Posting Flow**
+- Pre-session heads-up plus an extra note (channel and VIP variants)
+- Trade promo message (channel)
+- VIP-first signal details + code, then delayed free channel signal
+- Result message for each signal (VIP and channel)
+- Proof image for each signal (VIP and channel)
+- Session recap (VIP and channel)
+- Final push (channel)
+
+Proof images are rendered from templates in `proof/`.
+
 **Plan File**
 Provide a daily plan in JSON (default: `./plan.json`). Each signal includes direction and result; other fields have defaults that match the template.
-Each signal also posts a separate code message (one code per signal).
+VIP receives a separate code message per signal; the free channel receives the signal details without the code.
 If you prefer auto-generated signals, use `--auto-plan --auto-win-rate 0.9` and no plan file is required.
 
 Example `plan.json`:
@@ -88,19 +99,19 @@ python -m ghost.cli --once
 - `--vip-channel @vipchannel`: send VIP signals first and delayed free signals after
 - `--auto-plan`: generate random directions with a win-rate bias
 - `--auto-win-rate 0.9`: win rate for auto plan (0–1)
-- `--mode all|day|morning|evening|recap`: run a specific schedule slice (default `day`)
+- `--mode all|day|morning|evening`: run a specific schedule slice (default `day`)
 - `--result-delay 75`: seconds before posting result
 - `--free-delay 150`: seconds to delay free signals after VIP
-- `--daily-recap-time 18:00`: recap time in Tunisia time
-- `--weekly-recap-time 19:00`: weekly recap time (Sunday)
-- `--conversion-time 13:00`: daily conversion post time
+
+Note: Recap mode and recap/conversion timings are not used in the current posting flow.
 
 **GitHub Actions**
 The workflow in `.github/workflows/telegram.yml` runs short jobs on a UTC schedule using `--mode`:
 - Morning session job
 - Evening session job
-- Recap job (conversion, daily recap, weekly recap if due)
 
 State is persisted between runs via the Actions cache (`.ghost_state.json`).
+
+Recap mode is disabled in the current posting flow, so no recap cron entries are scheduled.
 
 Note: GitHub cron schedules use UTC. If Tunisia's UTC offset changes, update the cron times.

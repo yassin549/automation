@@ -5,9 +5,6 @@ on:
     # Tunisia time (UTC+1 assumed). Update if the offset changes.
     - cron: "55 7 * * *"   # 08:55 Tunisia -> morning session prep
     - cron: "25 14 * * *"  # 15:25 Tunisia -> evening session prep
-    - cron: "0 12 * * *"   # 13:00 Tunisia -> conversion post
-    - cron: "0 17 * * *"   # 18:00 Tunisia -> daily recap
-    - cron: "0 18 * * 0"   # Sunday 19:00 Tunisia -> weekly recap
   workflow_dispatch:
     inputs:
       mode:
@@ -70,7 +67,6 @@ jobs:
           case "${{ github.event.schedule }}" in
             "55 7 * * *") mode="morning" ;;
             "25 14 * * *") mode="evening" ;;
-            "0 12 * * *"|"0 17 * * *"|"0 18 * * 0") mode="recap" ;;
             *) mode="recap" ;;
           esac
           echo "mode=$mode" >> $GITHUB_OUTPUT

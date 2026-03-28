@@ -1,9 +1,4 @@
-﻿from ghost.messages import (
-    AUDIENCE_CHANNEL,
-    ProfitExample,
-    build_result_message,
-    build_signal_message,
-)
+﻿from ghost.messages import build_result_message, build_signal_details
 from ghost.plan import (
     DEFAULT_ASSET,
     DEFAULT_CONFIDENCE,
@@ -14,11 +9,6 @@ from ghost.plan import (
     DEFAULT_MARKET_CONDITION,
     SignalPlan,
 )
-
-def _flatten_message(message: str | list[str]) -> str:
-    if isinstance(message, list):
-        return "\n".join(message)
-    return message
 
 
 def _sample_signal(result: str = "WIN") -> SignalPlan:
@@ -38,25 +28,13 @@ def _sample_signal(result: str = "WIN") -> SignalPlan:
 
 def test_build_signal_message_contains_direction() -> None:
     signal = _sample_signal()
-    message = _flatten_message(build_signal_message(signal, AUDIENCE_CHANNEL))
+    message = build_signal_details(signal)
     assert signal.direction in message
     assert signal.asset in message
 
 
 def test_build_result_message_win_loss() -> None:
-    signal = _sample_signal(result="WIN")
-    example = ProfitExample(
-        starting_balance=100,
-        risk_per_trade=10,
-        win_profit="8",
-        loss_cost="10",
-        net_profit="8",
-    )
-    win_message = _flatten_message(
-        build_result_message(signal, "WIN", example, AUDIENCE_CHANNEL)
-    )
-    loss_message = _flatten_message(
-        build_result_message(signal, "LOSS", example, AUDIENCE_CHANNEL)
-    )
+    win_message = build_result_message("WIN")
+    loss_message = build_result_message("LOSS")
     assert "✅ WIN" in win_message
     assert "❌ LOSS" in loss_message

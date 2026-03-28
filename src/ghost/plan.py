@@ -22,10 +22,14 @@ DEFAULT_CONFIDENCE = 85
 DEFAULT_MARKET_CONDITION = "Rejection Zone"
 DEFAULT_INSIGHT = "Liquidity sweep -> bearish continuation"
 
-MIN_SIGNALS_PER_SESSION = 5
-MAX_SIGNALS_PER_SESSION = 5
-MIN_SIGNALS_PER_DAY = 10
-MAX_SIGNALS_PER_DAY = 10
+MIN_SIGNALS_PER_SESSION = 3
+MAX_SIGNALS_PER_SESSION = 6
+MIN_SIGNALS_PER_DAY = 6
+MAX_SIGNALS_PER_DAY = 12
+
+MIN_SESSION_MINUTES = 20
+MAX_SESSION_MINUTES = 60
+DEFAULT_PRE_SIGNAL_BUFFER_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -136,9 +140,19 @@ def schedule_signals(
         if count == 0:
             return []
         window = (end_dt - start_dt).total_seconds()
+        buffer_seconds = min(DEFAULT_PRE_SIGNAL_BUFFER_SECONDS, max(0, window))
+        max_duration = min(MAX_SESSION_MINUTES * 60, max(0, window - buffer_seconds))
+        min_duration = min(MIN_SESSION_MINUTES * 60, max_duration)
         rng = random.Random(f"{session_date.isoformat()}:{session_name}")
-        offsets = sorted(rng.uniform(0, window) for _ in range(count))
-        return [start_dt + timedelta(seconds=offset) for offset in offsets]
+        duration = max_duration if max_duration == min_duration else rng.uniform(
+            min_duration, max_duration
+        )
+        base_start = start_dt + timedelta(seconds=buffer_seconds)
+        if count == 1:
+            return [base_start + timedelta(seconds=duration / 2)]
+        step = duration / (count - 1)
+        offsets = [i * step for i in range(count)]
+        return [base_start + timedelta(seconds=offset) for offset in offsets]
 
     scheduled: list[datetime] = []
     for signal in signals:
@@ -149,6 +163,13 @@ def schedule_signals(
         scheduled.append(datetime.combine(session_date, signal.signal_time, tzinfo=tz))
 
     scheduled.sort()
+    if len(scheduled) >= 2:
+        duration = (scheduled[-1] - scheduled[0]).total_seconds()
+        if duration < MIN_SESSION_MINUTES * 60 or duration > MAX_SESSION_MINUTES * 60:
+            raise PlanError(
+                f"Session '{session_name}' duration must be {MIN_SESSION_MINUTES}-"
+                f"{MAX_SESSION_MINUTES} minutes."
+            )
     return scheduled
 
 
