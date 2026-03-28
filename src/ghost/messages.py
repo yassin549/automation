@@ -44,13 +44,13 @@ def _vip_cta_message() -> str:
 def build_pre_session_message(audience: str) -> list[str]:
     if audience == AUDIENCE_VIP:
         base = (
-            "⏳ Starting in 5 min\n"
+            "new trading session starting in 5 minutes...\n"
             "\n"
             "We’ll drop all VIP setups inside this session window — stay ready."
         )
     else:
         base = (
-            "⏳ Session starts in 5 min\n"
+            "new trading session starting in 5 minutes...\n"
             "\n"
             "Signals will only be valid during this time, don’t be late."
         )
@@ -130,8 +130,11 @@ def build_vip_signal_message(signal: "SignalLike") -> list[str]:
     return [details, context, _trade_promo_message()]
 
 
-def build_code_message(code: str) -> str:
-    return f"Code: {code}"
+def build_code_message(code: str) -> list[str]:
+    return [
+        "copy the code below to match the entry",
+        code,
+    ]
 
 
 def build_free_delayed_message(signal: "SignalLike", vip_extra_count: int) -> list[str]:
