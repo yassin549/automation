@@ -15,6 +15,11 @@ from ghost.plan import (
     SignalPlan,
 )
 
+def _flatten_message(message: str | list[str]) -> str:
+    if isinstance(message, list):
+        return "\n".join(message)
+    return message
+
 
 def _sample_signal(result: str = "WIN") -> SignalPlan:
     return SignalPlan(
@@ -33,7 +38,7 @@ def _sample_signal(result: str = "WIN") -> SignalPlan:
 
 def test_build_signal_message_contains_direction() -> None:
     signal = _sample_signal()
-    message = build_signal_message(signal, AUDIENCE_CHANNEL)
+    message = _flatten_message(build_signal_message(signal, AUDIENCE_CHANNEL))
     assert signal.direction in message
     assert signal.asset in message
 
@@ -47,5 +52,11 @@ def test_build_result_message_win_loss() -> None:
         loss_cost="10",
         net_profit="8",
     )
-    assert "Result: WIN" in build_result_message(signal, "WIN", example, AUDIENCE_CHANNEL)
-    assert "Result: LOSS" in build_result_message(signal, "LOSS", example, AUDIENCE_CHANNEL)
+    win_message = _flatten_message(
+        build_result_message(signal, "WIN", example, AUDIENCE_CHANNEL)
+    )
+    loss_message = _flatten_message(
+        build_result_message(signal, "LOSS", example, AUDIENCE_CHANNEL)
+    )
+    assert "Result: WIN" in win_message
+    assert "Result: LOSS" in loss_message

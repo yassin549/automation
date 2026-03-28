@@ -64,7 +64,7 @@ def build_result_message(
     outcome = "WIN" if result.upper() == "WIN" else "LOSS"
     profit = _signed_money(example.net_profit)
     result_line = (
-        f"Result: {asset} {direction} | {outcome}\n"
+        f"Result: {outcome} | {asset} {direction}\n"
         f"Example P&L (start ${example.starting_balance}): Net {profit}\n"
         "All outcomes are posted."
     )
