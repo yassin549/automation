@@ -22,20 +22,22 @@ WEBSITE_URL = "https://optitrade.site/?ref=APEX"
 
 def _trade_promo_message() -> str:
     return (
-        "Optitrade perks: 100% deposit bonus, instant withdrawals.\n"
-        f"More benefits: {WEBSITE_URL}"
+        "🌐 Optitrade perks\n"
+        "🎁 100% deposit bonus\n"
+        "⚡ Instant withdrawals\n"
+        f"🔗 More benefits: {WEBSITE_URL}"
     )
 
 
 def _vip_cta_message() -> str:
-    return 'VIP gets early entries and full details.\nReply "VIP" or "TRIAL".'
+    return '💎 VIP = early entries + full details\n📩 Reply "VIP" or "TRIAL"'
 
 
 def build_pre_session_message(audience: str) -> list[str]:
     if audience == AUDIENCE_VIP:
-        base = "VIP session starts in 5 minutes.\nFull signals follow in this window."
+        base = "⏳ VIP session starts in 5 minutes\n📍 Full signals drop inside this window"
     else:
-        base = "New trading session starts in 5 minutes.\nSignals are valid only in the window."
+        base = "⏳ New trading session starts in 5 minutes\n📍 Signals are valid only inside the window"
     return [base, _trade_promo_message()]
 
 
@@ -43,12 +45,17 @@ def build_signal_message(
     signal: "SignalLike", audience: str = AUDIENCE_CHANNEL
 ) -> list[str]:
     details = (
-        f"Signal: {signal.asset} {signal.direction}\n"
-        f"Expiry: {signal.expiry} | Window: {signal.entry_window}"
+        "📣 Signal\n"
+        f"🏷️ Asset: {signal.asset}\n"
+        f"➡️ Direction: {signal.direction}\n"
+        f"⏰ Expiry: {signal.expiry}\n"
+        f"🕒 Window: {signal.entry_window}"
     )
     context = (
-        f"Confidence: {signal.confidence}% | Market: {signal.market_condition}\n"
-        f"Insight: {signal.insight} | Skip if late; code next."
+        f"📊 Confidence: {signal.confidence}%\n"
+        f"🧭 Market: {signal.market_condition}\n"
+        f"💡 Insight: {signal.insight}\n"
+        "⏭️ Skip if late; code next"
     )
     return [details, context, _trade_promo_message()]
 
@@ -63,17 +70,21 @@ def build_result_message(
     asset = _short_asset(signal.asset)
     outcome = "WIN" if result.upper() == "WIN" else "LOSS"
     profit = _signed_money(example.net_profit)
+    status_emoji = "✅" if outcome == "WIN" else "❌"
     result_line = (
-        f"Result: {outcome} | {asset} {direction}\n"
-        f"Example P&L (start ${example.starting_balance}): Net {profit}\n"
-        "All outcomes are posted."
+        f"{status_emoji} Result: {outcome}\n"
+        f"🏷️ {asset} {direction}\n"
+        "💵 Example P&L\n"
+        f"💰 Start: ${example.starting_balance}\n"
+        f"📈 Net: {profit}\n"
+        "ℹ️ All outcomes are posted"
     )
     return [result_line, _trade_promo_message()]
 
 
 def build_vip_push_message() -> list[str]:
     return [
-        "Win streak: 2 in a row.\nVIP got early entries; free signals are delayed.",
+        "🔥 Win streak: 2 in a row\n🔒 VIP got early entries\n⏳ Free signals are delayed",
         _vip_cta_message(),
         _trade_promo_message(),
     ]
@@ -81,12 +92,18 @@ def build_vip_push_message() -> list[str]:
 
 def build_vip_signal_message(signal: "SignalLike") -> list[str]:
     details = (
-        f"VIP signal: {signal.asset} {signal.direction}\n"
-        f"Expiry: {signal.expiry} | Window: {signal.entry_window} | Entry: {signal.entry}"
+        "🔒 VIP signal\n"
+        f"🏷️ Asset: {signal.asset}\n"
+        f"➡️ Direction: {signal.direction}\n"
+        f"⏰ Expiry: {signal.expiry}\n"
+        f"🕒 Window: {signal.entry_window}\n"
+        f"🎯 Entry: {signal.entry}"
     )
     context = (
-        f"Confidence: {signal.confidence}% | Market: {signal.market_condition}\n"
-        f"Insight: {signal.insight} | Code next."
+        f"📊 Confidence: {signal.confidence}%\n"
+        f"🧭 Market: {signal.market_condition}\n"
+        f"💡 Insight: {signal.insight}\n"
+        "⏭️ Code next"
     )
     return [details, context, _trade_promo_message()]
 
@@ -96,13 +113,19 @@ def build_code_message(code: str) -> str:
 
 
 def build_free_delayed_message(signal: "SignalLike", vip_extra_count: int) -> list[str]:
-    note = "Free signal (delayed).\nVIP received this earlier."
+    note = "🕒 Free signal (delayed)\n🔒 VIP received this earlier"
     if vip_extra_count > 0:
-        note = f"{note}\nVIP had {vip_extra_count} extra signals this session."
+        note = f"{note}\n➕ VIP had {vip_extra_count} extra signals this session"
     details = (
-        f"Signal: {_short_asset(signal.asset)} {signal.direction}\n"
-        f"Expiry: {signal.expiry} | Window: {signal.entry_window} | Confidence: {signal.confidence}%\n"
-        f"Market: {signal.market_condition} | Insight: {signal.insight} | Skip if late; code next."
+        "📣 Signal\n"
+        f"🏷️ Asset: {_short_asset(signal.asset)}\n"
+        f"➡️ Direction: {signal.direction}\n"
+        f"⏰ Expiry: {signal.expiry}\n"
+        f"🕒 Window: {signal.entry_window}\n"
+        f"📊 Confidence: {signal.confidence}%\n"
+        f"🧭 Market: {signal.market_condition}\n"
+        f"💡 Insight: {signal.insight}\n"
+        "⏭️ Skip if late; code next"
     )
     return [note, details, _trade_promo_message()]
 
@@ -112,13 +135,19 @@ def build_daily_recap_message(
 ) -> list[str]:
     win_rate = _win_rate(stats)
     summary = (
-        "Daily recap\n"
-        f"Signals {stats.total} | Wins {stats.wins} | Losses {stats.losses} | "
-        f"Win rate {win_rate}%"
+        "📅 Daily recap\n"
+        f"🎯 Signals: {stats.total}\n"
+        f"✅ Wins: {stats.wins}\n"
+        f"❌ Losses: {stats.losses}\n"
+        f"🏆 Win rate: {win_rate}%"
     )
     pnl = (
-        f"Example P&L (start ${example.starting_balance}, risk ${example.risk_per_trade})\n"
-        f"+${example.win_profit} / -${example.loss_cost} / Net {_signed_money(example.net_profit)}"
+        "💵 Example P&L\n"
+        f"💰 Start: ${example.starting_balance}\n"
+        f"🧮 Risk/trade: ${example.risk_per_trade}\n"
+        f"✅ Win: +${example.win_profit}\n"
+        f"❌ Loss: -${example.loss_cost}\n"
+        f"📈 Net: {_signed_money(example.net_profit)}"
     )
     return [summary, pnl, _trade_promo_message()]
 
@@ -129,15 +158,18 @@ def build_weekly_recap_message(
     win_rate = _win_rate(stats)
     lines = [
         (
-            "Weekly recap\n"
-            f"Signals {stats.total} | Wins {stats.wins} | Losses {stats.losses} | "
-            f"Win rate {win_rate}%"
+            "📆 Weekly recap\n"
+            f"🎯 Signals: {stats.total}\n"
+            f"✅ Wins: {stats.wins}\n"
+            f"❌ Losses: {stats.losses}\n"
+            f"🏆 Win rate: {win_rate}%"
         )
     ]
     for example in examples:
         lines.append(
-            f"Example P&L (start ${example.starting_balance})\n"
-            f"Net {_signed_money(example.net_profit)}"
+            "💵 Example P&L\n"
+            f"💰 Start: ${example.starting_balance}\n"
+            f"📈 Net: {_signed_money(example.net_profit)}"
         )
     lines.append(_trade_promo_message())
     return lines
@@ -148,74 +180,83 @@ def build_session_recap_message(
 ) -> list[str]:
     win_rate = _win_rate(stats)
     label = "Morning" if session_name == "morning" else "Evening"
+    icon = "🌅" if session_name == "morning" else "🌙"
     summary = (
-        f"{label} session recap\n"
-        f"Signals {stats.total} | Wins {stats.wins} | "
-        f"Losses {stats.losses} | Win rate {win_rate}%"
+        f"{icon} {label} session recap\n"
+        f"🎯 Signals: {stats.total}\n"
+        f"✅ Wins: {stats.wins}\n"
+        f"❌ Losses: {stats.losses}\n"
+        f"🏆 Win rate: {win_rate}%"
     )
     return [summary, _trade_promo_message()]
 
 
 CONVERSION_SOFT = [
-    "VIP gives early entries, full details, priority support.\n"
-    'Reply "VIP" or "TRIAL" to join.',
+    "💎 VIP perks\n"
+    "⚡ Early entries\n"
+    "🧠 Full details\n"
+    "🛟 Priority support\n"
+    '📩 Reply "VIP" or "TRIAL" to join',
     _trade_promo_message(),
 ]
 
 CONVERSION_TRIAL = [
-    "VIP trial: 24h for $10.\n"
-    'Reply "VIP" or "TRIAL" to start.',
+    "🧪 VIP trial\n"
+    "⏱️ 24h access\n"
+    "💵 $10\n"
+    '📩 Reply "VIP" or "TRIAL" to start',
     _trade_promo_message(),
 ]
 
 CONVERSION_SCARCITY = [
-    "VIP spots are limited to keep entries fast.\n"
-    'Reply "VIP" or "TRIAL" to join.',
+    "🚪 VIP spots are limited\n"
+    "⚡ Keeps entries fast\n"
+    '📩 Reply "VIP" or "TRIAL" to join',
     _trade_promo_message(),
 ]
 
 
 CHANNEL_PROMO_LINES = [
-    "VIP delivers the earliest entries.\nFull context included.",
-    "VIP sends entries first.\nFull details included.",
-    "VIP: earliest alerts.\nFull breakdown included.",
-    "VIP gives priority access.\nAll setups included.",
+    "🔒 VIP = earliest entries\n🧾 Full context included",
+    "⚡ VIP sends entries first\n🧠 Full details included",
+    "💎 VIP alerts first\n🗂️ Full breakdown included",
+    "🚀 VIP gives priority access\n🧾 All setups included",
 ]
 
 CHANNEL_PROMO_CTA = [
-    'Reply "VIP" or "TRIAL" for access.',
-    'Message "VIP" or "TRIAL" to join.',
-    'Want in? Reply "VIP" or "TRIAL".',
+    '📩 Reply "VIP" or "TRIAL" for access',
+    '📨 Message "VIP" or "TRIAL" to join',
+    '❓ Want in? Reply "VIP" or "TRIAL"',
 ]
 
 VIP_REMINDER_LINES = [
-    "Reminder: enter only within the window.\nLate entries reduce accuracy.",
-    "Reminder: match expiry and direction exactly.\nDouble-check before entry.",
-    "Reminder: skip late entries and wait for the next setup.\nProtect timing.",
+    "⏱️ Reminder\n✅ Enter only within the window\n⛔ Late entries reduce accuracy",
+    "🧭 Reminder\n✅ Match expiry and direction\n🔍 Double-check before entry",
+    "⏳ Reminder\n⛔ Skip late entries\n⏭️ Wait for the next setup",
 ]
 
 
 def build_follow_instructions_message(audience: str = AUDIENCE_CHANNEL) -> list[str]:
     steps = (
-        "Follow steps:\n"
+        "🧭 Follow steps\n"
         "1) Register on Optitrade\n"
         "2) Deposit $50+\n"
         "3) Match expiry and window"
     )
-    note = "Signals are optimized for our platform."
+    note = "🧩 Signals are optimized for our platform"
     return [steps, note, _trade_promo_message()]
 
 
 def build_vip_welcome_message() -> list[str]:
     return [
-        "Welcome to VIP. Early entries, full details, priority support.",
+        "🎉 Welcome to VIP\n⚡ Early entries\n🧠 Full details\n🛟 Priority support",
         _trade_promo_message(),
     ]
 
 
 def build_vip_rules_message() -> list[str]:
     rules = (
-        "VIP rules:\n"
+        "📌 VIP rules\n"
         "1) Enter only in the window\n"
         "2) Match expiry and direction\n"
         "3) Skip late entries\n"
@@ -226,7 +267,7 @@ def build_vip_rules_message() -> list[str]:
 
 def build_vip_follow_message() -> list[str]:
     steps = (
-        "Follow VIP:\n"
+        "🧭 Follow VIP\n"
         "1) Trade on Optitrade\n"
         "2) Match expiry, window, direction\n"
         "3) Paste the code"
