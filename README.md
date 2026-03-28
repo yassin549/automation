@@ -30,6 +30,9 @@ Optional:
 - Result message for each signal (VIP and channel)
 - Proof image for each signal (VIP and channel)
 - Session recap (VIP and channel)
+- Midday conversion sequence (channel only)
+- Daily recap (morning + evening sections; VIP and channel)
+- Weekly recap (VIP and channel, Sundays)
 - Final push (channel)
 
 Proof images are rendered from templates in `proof/`.
@@ -103,7 +106,7 @@ python -m ghost.cli --once
 - `--result-delay 75`: seconds before posting result
 - `--free-delay 150`: seconds to delay free signals after VIP
 
-Note: Recap mode and recap/conversion timings are not used in the current posting flow.
+Note: Recap mode is still unused, but daily/weekly recaps and conversion timing are used in the day flow.
 
 **GitHub Actions**
 The workflow in `.github/workflows/telegram.yml` runs short jobs on a UTC schedule using `--mode`:

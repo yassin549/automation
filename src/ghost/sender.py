@@ -18,6 +18,11 @@ from .messages import (
     AUDIENCE_CHANNEL,
     AUDIENCE_VIP,
     RecapStats,
+    build_conversion_scarcity,
+    build_conversion_soft,
+    build_conversion_trial,
+    conversion_scarcity_count,
+    build_daily_recap,
     build_code_intro,
     build_code_value,
     build_final_push,
@@ -26,6 +31,7 @@ from .messages import (
     build_result_message,
     build_session_recap_channel,
     build_session_recap_vip,
+    build_weekly_recap,
     build_signal_details,
     build_trade_promo_message,
 )
@@ -209,9 +215,12 @@ async def _run_day(
 
     morning = _build_session_context(plan, tz, today, "morning")
     await _run_session(client, config, morning, state, logger, tz, vip_target)
+    await _post_conversion_messages(client, config, state, logger, tz)
 
     evening = _build_session_context(plan, tz, today, "evening")
     await _run_session(client, config, evening, state, logger, tz, vip_target)
+    await _post_daily_recap(client, config, state, logger, tz, vip_target)
+    await _post_weekly_recap(client, config, state, logger, tz, vip_target)
 
 
 async def _run_mode_once(
@@ -677,6 +686,140 @@ async def _post_final_push(
     save_state(config.state_path, state)
 
 
+async def _post_conversion_messages(
+    client: TelegramClient,
+    config: AppConfig,
+    state: BotState,
+    logger: logging.Logger,
+    tz: ZoneInfo,
+) -> None:
+    if state.conversion_posted:
+        return
+    day = date.fromisoformat(state.day)
+    conversion_at = datetime.combine(day, config.conversion_time, tzinfo=tz)
+    if datetime.now(tz) < conversion_at:
+        await _wait_until(conversion_at, tz)
+    if state.conversion_posted:
+        return
+
+    await _try_send_message(
+        client,
+        config.channel,
+        build_conversion_soft(),
+        logger,
+        "conversion soft",
+    )
+    await _try_send_message(
+        client,
+        config.channel,
+        build_conversion_trial(),
+        logger,
+        "conversion trial",
+    )
+    await _try_send_message(
+        client,
+        config.channel,
+        build_conversion_scarcity(state.conversion_scarcity_index),
+        logger,
+        "conversion scarcity",
+    )
+    state.conversion_scarcity_index = (
+        state.conversion_scarcity_index + 1
+    ) % max(1, conversion_scarcity_count())
+
+    state.conversion_posted = True
+    save_state(config.state_path, state)
+
+
+async def _post_daily_recap(
+    client: TelegramClient,
+    config: AppConfig,
+    state: BotState,
+    logger: logging.Logger,
+    tz: ZoneInfo,
+    vip_target: object | None,
+) -> None:
+    action_id = _action_id(date.fromisoformat(state.day), "daily", "recap")
+    if state.was_executed(action_id):
+        return
+    day = date.fromisoformat(state.day)
+    recap_at = datetime.combine(day, config.daily_recap_time, tzinfo=tz)
+    if datetime.now(tz) < recap_at:
+        await _wait_until(recap_at, tz)
+
+    morning = _recap_stats_from(state.session_stats.get("morning"))
+    evening = _recap_stats_from(state.session_stats.get("evening"))
+    if morning.total + evening.total <= 0:
+        return
+
+    message = build_daily_recap(morning, evening)
+    if vip_target is not None:
+        await _try_send_message(
+            client,
+            vip_target,
+            message,
+            logger,
+            "vip daily recap",
+        )
+    await _try_send_message(
+        client,
+        config.channel,
+        message,
+        logger,
+        "channel daily recap",
+    )
+    state.mark_executed(action_id)
+    save_state(config.state_path, state)
+
+
+async def _post_weekly_recap(
+    client: TelegramClient,
+    config: AppConfig,
+    state: BotState,
+    logger: logging.Logger,
+    tz: ZoneInfo,
+    vip_target: object | None,
+) -> None:
+    day = date.fromisoformat(state.day)
+    if not _is_week_end(day):
+        return
+    action_id = _action_id(day, "weekly", "recap")
+    if state.was_executed(action_id):
+        return
+    recap_at = datetime.combine(day, config.weekly_recap_time, tzinfo=tz)
+    if datetime.now(tz) < recap_at:
+        await _wait_until(recap_at, tz)
+
+    weekly_stats = _recap_stats_from(state.weekly)
+    if weekly_stats.total <= 0:
+        return
+    example = _profit_example(
+        weekly_stats,
+        config.example_start_balance,
+        config.example_risk_per_trade,
+        config.payout_ratio,
+    )
+    net_profit = _format_signed_dollars(example.net_profit)
+    message = build_weekly_recap(weekly_stats, example.starting_balance, net_profit)
+    if vip_target is not None:
+        await _try_send_message(
+            client,
+            vip_target,
+            message,
+            logger,
+            "vip weekly recap",
+        )
+    await _try_send_message(
+        client,
+        config.channel,
+        message,
+        logger,
+        "channel weekly recap",
+    )
+    state.mark_executed(action_id)
+    save_state(config.state_path, state)
+
+
 async def _wait_for_result(
     state: BotState,
     signal_key: str,
@@ -798,6 +941,26 @@ def _update_stats_after_result(
     state.daily.record(result)
     state.weekly.record(result)
     state.session_stats.setdefault(session_name, Stats()).record(result)
+
+
+def _recap_stats_from(stats: Stats | None) -> RecapStats:
+    if not stats:
+        return RecapStats(total=0, wins=0, losses=0)
+    return RecapStats(total=stats.total, wins=stats.wins, losses=stats.losses)
+
+
+def _format_signed_dollars(value: str) -> str:
+    try:
+        number = float(value)
+    except ValueError:
+        return value
+    sign = "+" if number >= 0 else "-"
+    amount = _format_money(abs(number))
+    return f"{sign}${amount}"
+
+
+def _is_week_end(day: date) -> bool:
+    return day.isoweekday() == 7
 
 
 async def _sleep_seconds(delay_seconds: float) -> None:

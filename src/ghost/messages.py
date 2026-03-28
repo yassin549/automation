@@ -18,21 +18,21 @@ AUDIENCE_VIP = "vip"
 
 
 TRADE_PROMO = (
-    " Why we use Optitrade:\n"
+    "🔥 Why we use Optitrade:\n"
     "\n"
-    "• 100% deposit bonus  \n"
-    "• Fast withdrawals  \n"
-    "• Smooth execution  \n"
+    "• 100% deposit bonus 💰  \n"
+    "• Fast withdrawals ⚡  \n"
+    "• Smooth execution ✅  \n"
     "\n"
     " https://optitrade.site/?ref=APEX"
 )
 
 PRE_SESSION_BASE = "⏳ New trading session starting in 5 minutes..."
-PRE_SESSION_CHANNEL_EXTRA = "Signals will only be valid during this time, don’t be late."
-PRE_SESSION_VIP_EXTRA = "We’ll drop all VIP setups inside this session window, stay ready."
+PRE_SESSION_CHANNEL_EXTRA = "⚠️ Signals will only be valid during this time, don’t be late."
+PRE_SESSION_VIP_EXTRA = "💎 We’ll drop all VIP setups inside this session window, stay ready."
 
 SIGNAL_DETAILS = (
-    " New setup\n"
+    "🚨 new sinal:\n"
     "\n"
     "Asset: {asset}  \n"
     "Direction: {direction}  \n"
@@ -40,13 +40,13 @@ SIGNAL_DETAILS = (
     "Entry window: {entry_window}"
 )
 
-CODE_INTRO = "Paste code below to match the entry:"
+CODE_INTRO = "🔑 Paste code below to match the entry:"
 CODE_VALUE = "{code}"
 
 RESULT_MESSAGE = "{result_emoji} {WIN_OR_LOSS}"
 
 SESSION_RECAP_CHANNEL = (
-    "Session recap:\n"
+    "📊 Session recap:\n"
     "\n"
     "Signals: {total}  \n"
     "Wins: {wins}  \n"
@@ -55,21 +55,83 @@ SESSION_RECAP_CHANNEL = (
 )
 
 SESSION_RECAP_VIP = (
-    "Session done:\n"
+    "📊 Session recap:\n"
     "\n"
     "{total} trades  \n"
     "{wins} wins  \n"
     "{losses} losses"
 )
 
+DAILY_RECAP = (
+    "📅 Daily recap:\n"
+    "\n"
+    "Session (Morning)\n"
+    "\n"
+    "🌅 Morning session done:\n"
+    "\n"
+    "Signals: {morning_total}  \n"
+    "Wins: {morning_wins}  \n"
+    "Losses: {morning_losses}  \n"
+    "Win rate: {morning_win_rate}%\n"
+    "\n"
+    "Session (Evening)\n"
+    "\n"
+    "🌙 Evening session done:\n"
+    "\n"
+    "Signals: {evening_total}  \n"
+    "Wins: {evening_wins}  \n"
+    "Losses: {evening_losses}  \n"
+    "Win rate: {evening_win_rate}%"
+)
+
+WEEKLY_RECAP = (
+    "📆 Weekly recap:\n"
+    "\n"
+    "Total: {total}  \n"
+    "Wins: {wins}  \n"
+    "Losses: {losses}  \n"
+    "Win rate: {win_rate}%\n"
+    "\n"
+    "Example:\n"
+    "\n"
+    "Start: ${starting_balance}  \n"
+    "Net: {net_profit}"
+)
+
+CONVERSION_SOFT = (
+    "🟢 Soft\n"
+    "\n"
+    "VIP gives you:\n"
+    "\n"
+    "• Earlier entries  \n"
+    "• Full reasoning  \n"
+    "• Priority help  \n"
+    "\n"
+    "Message \"VIP\" or \"TRIAL\" if you want in."
+)
+
+CONVERSION_TRIAL = (
+    "🧪 Trial\n"
+    "\n"
+    "Try VIP for 24h\n"
+    "\n"
+    "Access: $10\n"
+    "\n"
+    "Reply \"TRIAL\" to start."
+)
+
+CONVERSION_SCARCITY_OPTIONS = (
+    "Join VIP to get the best entries.",
+    "Limited VIP spots for $50 one-time purchase.",
+    "Join VIP to get 10 signals every day.",
+)
+
 FINAL_PUSH = (
-    " Solid session today\n"
+    "🔥 2 wins back-to-back\n"
     "\n"
-    "VIP caught the best entries again.\n"
+    "VIP got in earlier on both.\n"
     "\n"
-    "Free signals are always delayed.\n"
-    "\n"
-    "Message 'VIP'"
+    "Free signals come later for a reason."
 )
 
 
@@ -132,6 +194,50 @@ def build_session_recap_vip(stats: RecapStats) -> str:
         wins=stats.wins,
         losses=stats.losses,
     )
+
+
+def build_daily_recap(morning: RecapStats, evening: RecapStats) -> str:
+    return DAILY_RECAP.format(
+        morning_total=morning.total,
+        morning_wins=morning.wins,
+        morning_losses=morning.losses,
+        morning_win_rate=_win_rate(morning),
+        evening_total=evening.total,
+        evening_wins=evening.wins,
+        evening_losses=evening.losses,
+        evening_win_rate=_win_rate(evening),
+    )
+
+
+def build_weekly_recap(
+    stats: RecapStats, starting_balance: int, net_profit: str
+) -> str:
+    return WEEKLY_RECAP.format(
+        total=stats.total,
+        wins=stats.wins,
+        losses=stats.losses,
+        win_rate=_win_rate(stats),
+        starting_balance=starting_balance,
+        net_profit=net_profit,
+    )
+
+
+def build_conversion_soft() -> str:
+    return CONVERSION_SOFT
+
+
+def build_conversion_trial() -> str:
+    return CONVERSION_TRIAL
+
+
+def build_conversion_scarcity(index: int) -> str:
+    if not CONVERSION_SCARCITY_OPTIONS:
+        return ""
+    return CONVERSION_SCARCITY_OPTIONS[index % len(CONVERSION_SCARCITY_OPTIONS)]
+
+
+def conversion_scarcity_count() -> int:
+    return len(CONVERSION_SCARCITY_OPTIONS)
 
 
 def build_final_push() -> str:
