@@ -58,5 +58,5 @@ def test_build_result_message_win_loss() -> None:
     loss_message = _flatten_message(
         build_result_message(signal, "LOSS", example, AUDIENCE_CHANNEL)
     )
-    assert "Result: WIN" in win_message
-    assert "Result: LOSS" in loss_message
+    assert "✅ WIN" in win_message
+    assert "❌ LOSS" in loss_message
