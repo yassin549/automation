@@ -96,7 +96,7 @@ async def run_sender(
             )
 
         vip_target = None
-        if config.vip_channel and mode in {"day", "morning", "evening"}:
+        if config.vip_channel and mode in {"day", "morning", "evening", "recap", "all"}:
             vip_target = await _resolve_vip_target(client, config.vip_channel, logger)
 
         if mode in {"day", "all"}:
@@ -931,8 +931,23 @@ async def _wait_until(
         await asyncio.sleep(sleep_for)
 
 
-async def _send_message(client: TelegramClient, channel: object, message: str):
-    return await client.send_message(channel, message)
+def _contains_url(message: str) -> bool:
+    return "http://" in message or "https://" in message
+
+
+async def _send_message(client: TelegramClient, channel: object, message: str | list[str]):
+    if isinstance(message, list):
+        first_message = None
+        for part in message:
+            if not part:
+                continue
+            sent = await _send_message(client, channel, part)
+            if first_message is None:
+                first_message = sent
+        return first_message
+    return await client.send_message(
+        channel, message, link_preview=not _contains_url(message)
+    )
 
 
 async def _run_mode_once(

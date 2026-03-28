@@ -1,7 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+
+
+Message = str | list[str]
 
 
 @dataclass(frozen=True)
@@ -17,46 +20,37 @@ AUDIENCE_VIP = "vip"
 WEBSITE_URL = "https://optitrade.site/?ref=APEX"
 
 
-def _promo_block(audience: str) -> str:
+def _trade_promo_message() -> str:
+    return (
+        "Optitrade perks: 100% deposit bonus, instant withdrawals.\n"
+        f"More benefits: {WEBSITE_URL}"
+    )
+
+
+def _vip_cta_message() -> str:
+    return 'VIP gets early entries and full details.\nReply "VIP" or "TRIAL".'
+
+
+def build_pre_session_message(audience: str) -> list[str]:
     if audience == AUDIENCE_VIP:
-        return f"🌐 Trade here to match the entries:\n{WEBSITE_URL}"
-    return (
-        '👑 Want earlier entries and full details? Reply "VIP" or "TRIAL".\n'
-        f"🌐 Trade here: {WEBSITE_URL}"
+        base = "VIP session starts in 5 minutes.\nFull signals follow in this window."
+    else:
+        base = "New trading session starts in 5 minutes.\nSignals are valid only in the window."
+    return [base, _trade_promo_message()]
+
+
+def build_signal_message(
+    signal: "SignalLike", audience: str = AUDIENCE_CHANNEL
+) -> list[str]:
+    details = (
+        f"Signal: {signal.asset} {signal.direction}\n"
+        f"Expiry: {signal.expiry} | Window: {signal.entry_window}"
     )
-
-
-def build_pre_session_message(audience: str) -> str:
-    if audience == AUDIENCE_VIP:
-        return (
-            "👑 VIP session is live.\n\n"
-            "Full signals start now. Stay sharp. ⚡\n\n"
-            "entries are time-sensitive, so alerts matter.\n\n"
-            f"{_promo_block(audience)}"
-        )
-    return (
-        "🕒 Session is live.\n\n"
-        "Sample signals will appear during this window.\n"
-        "VIP gets early entries. 🔔\n\n"
-        "signals are only valid inside this session window.\n\n"
-        f"{_promo_block(audience)}"
+    context = (
+        f"Confidence: {signal.confidence}% | Market: {signal.market_condition}\n"
+        f"Insight: {signal.insight} | Skip if late; code next."
     )
-
-
-def build_signal_message(signal: "SignalLike", audience: str = AUDIENCE_CHANNEL) -> str:
-    return (
-        "🚨 New signal\n\n"
-        f"Setup: {signal.asset} — {signal.direction} 🎯\n"
-        f"Expiry: {signal.expiry}\n"
-        f"Entry window: {signal.entry_window}\n\n"
-        f"Confidence: {signal.confidence}%\n"
-        f"Market: {signal.market_condition}\n"
-        f"Insight: {signal.insight} 🧠\n\n"
-        "If the entry window passes, skip it and wait for the next setup.\n\n"
-        "Copy the code below and paste it inside the website. 🧩\n\n"
-        "this setup is only valid inside the entry window.\n\n"
-        f"{_promo_block(audience)}"
-    )
+    return [details, context, _trade_promo_message()]
 
 
 def build_result_message(
@@ -64,315 +58,191 @@ def build_result_message(
     result: str,
     example: "ProfitExample",
     audience: str = AUDIENCE_CHANNEL,
-) -> str:
+) -> list[str]:
     direction = signal.direction
     asset = _short_asset(signal.asset)
-    if result.upper() == "WIN":
-        outcome = "Result: WIN ✅"
-        tone = "Nice trade if you caught it."
-    else:
-        outcome = "Result: LOSS ❌"
-        tone = "No stress. We reset and wait for the next setup."
+    outcome = "WIN" if result.upper() == "WIN" else "LOSS"
     profit = _signed_money(example.net_profit)
-    seed = f"{signal.asset}-{signal.direction}-{result}"
-    intro = _pick_line(INTRO_LINES, seed)
-    motivation = _pick_line(MOTIVATION_LINES, seed + ":motivation")
-    promo = ""
-    if audience != AUDIENCE_VIP:
-        promo = _pick_line(PROMO_LINES, seed + ":promo")
-    lines = [
-        "📊 Result",
-        "",
-        f"{asset} — {direction}",
-        f"{outcome}",
-        f"{tone}",
-        "",
-        f"Example P&L (using ${example.starting_balance}):",
-        f"Net: {profit}",
-        "",
-        f"{intro}",
-        f"{motivation}",
+    result_line = (
+        f"Result: {asset} {direction} | {outcome}\n"
+        f"Example P&L (start ${example.starting_balance}): Net {profit}\n"
+        "All outcomes are posted."
+    )
+    return [result_line, _trade_promo_message()]
+
+
+def build_vip_push_message() -> list[str]:
+    return [
+        "Win streak: 2 in a row.\nVIP got early entries; free signals are delayed.",
+        _vip_cta_message(),
+        _trade_promo_message(),
     ]
-    if promo:
-        lines.append(promo)
-    lines.extend(
-        [
-            "",
-            "we publish every outcome for transparency.",
-            "",
-            _promo_block(audience),
-        ]
+
+
+def build_vip_signal_message(signal: "SignalLike") -> list[str]:
+    details = (
+        f"VIP signal: {signal.asset} {signal.direction}\n"
+        f"Expiry: {signal.expiry} | Window: {signal.entry_window} | Entry: {signal.entry}"
     )
-    return "\n".join(lines)
-
-
-def build_vip_push_message() -> str:
-    return (
-        "🔥 Two wins in a row.\n\n"
-        "VIP members got the earlier entries.\n"
-        "Free signals arrive with a delay.\n\n"
-        "speed matters on these entries.\n\n"
-        f"{_promo_block(AUDIENCE_CHANNEL)}"
+    context = (
+        f"Confidence: {signal.confidence}% | Market: {signal.market_condition}\n"
+        f"Insight: {signal.insight} | Code next."
     )
-
-
-def build_vip_signal_message(signal: "SignalLike") -> str:
-    return (
-        "👑 VIP signal\n\n"
-        f"Setup: {signal.asset} — {signal.direction} 🎯\n"
-        f"Expiry: {signal.expiry}\n"
-        f"Entry window: {signal.entry_window}\n"
-        f"Entry: {signal.entry}\n\n"
-        f"Confidence: {signal.confidence}%\n"
-        f"Market: {signal.market_condition}\n"
-        f"Insight: {signal.insight} 🧠\n\n"
-        "Copy the code below and paste it inside the website. 🧩\n\n"
-        "VIP gets full details and fastest entries.\n\n"
-        f"{_promo_block(AUDIENCE_VIP)}"
-    )
+    return [details, context, _trade_promo_message()]
 
 
 def build_code_message(code: str) -> str:
     return code
 
 
-def build_free_delayed_message(signal: "SignalLike", vip_extra_count: int) -> str:
-    extra_line = ""
+def build_free_delayed_message(signal: "SignalLike", vip_extra_count: int) -> list[str]:
+    note = "Free signal (delayed).\nVIP received this earlier."
     if vip_extra_count > 0:
-        extra_line = f"VIP got {vip_extra_count} additional signals this session.\n\n"
-    return (
-        "⏳ Free signal (delayed)\n\n"
-        "VIP received this earlier.\n\n"
-        f"{extra_line}"
-        f"Setup: {_short_asset(signal.asset)} — {signal.direction} 🎯\n"
-        f"Expiry: {signal.expiry}\n"
-        f"Entry window: {signal.entry_window}\n"
-        f"Confidence: {signal.confidence}%\n"
-        f"Market: {signal.market_condition}\n"
-        f"Insight: {signal.insight} 🧠\n\n"
-        "Copy the code below and paste it inside the website. 🧩\n\n"
-        "If the entry window already passed, skip this one.\n\n"
-        "free signals are delayed to protect VIP speed.\n\n"
-        f"{_promo_block(AUDIENCE_CHANNEL)}"
+        note = f"{note}\nVIP had {vip_extra_count} extra signals this session."
+    details = (
+        f"Signal: {_short_asset(signal.asset)} {signal.direction}\n"
+        f"Expiry: {signal.expiry} | Window: {signal.entry_window} | Confidence: {signal.confidence}%\n"
+        f"Market: {signal.market_condition} | Insight: {signal.insight} | Skip if late; code next."
     )
+    return [note, details, _trade_promo_message()]
 
 
 def build_daily_recap_message(
     stats: RecapStats, example: "ProfitExample", audience: str = AUDIENCE_CHANNEL
-) -> str:
+) -> list[str]:
     win_rate = _win_rate(stats)
-    return (
-        "📅 Daily recap\n\n"
-        f"Signals: {stats.total}\n"
-        f"Wins: {stats.wins} ✅\n"
-        f"Losses: {stats.losses} ❌\n"
-        f"Win rate: {win_rate}%\n\n"
-        "Example P&L (using the sizing below):\n"
-        f"Starting balance: ${example.starting_balance}\n"
-        f"Risk per trade: ${example.risk_per_trade}\n\n"
-        f"Wins: +${example.win_profit}\n"
-        f"Losses: -${example.loss_cost}\n\n"
-        f"Net: {_signed_money(example.net_profit)}\n\n"
-        "Thanks for trading with us today. 🙏\n\n"
-        "recaps keep results clear and consistent.\n\n"
-        f"{_promo_block(audience)}"
+    summary = (
+        "Daily recap\n"
+        f"Signals {stats.total} | Wins {stats.wins} | Losses {stats.losses} | "
+        f"Win rate {win_rate}%"
     )
+    pnl = (
+        f"Example P&L (start ${example.starting_balance}, risk ${example.risk_per_trade})\n"
+        f"+${example.win_profit} / -${example.loss_cost} / Net {_signed_money(example.net_profit)}"
+    )
+    return [summary, pnl, _trade_promo_message()]
 
 
 def build_weekly_recap_message(
     stats: RecapStats, examples: list["ProfitExample"], audience: str = AUDIENCE_CHANNEL
-) -> str:
+) -> list[str]:
     win_rate = _win_rate(stats)
     lines = [
-        "🗓️ Weekly recap",
-        "",
-        f"Signals: {stats.total}",
-        f"Wins: {stats.wins} ✅",
-        f"Losses: {stats.losses} ❌",
-        "",
-        f"Win rate: {win_rate}%",
-        "",
+        (
+            "Weekly recap\n"
+            f"Signals {stats.total} | Wins {stats.wins} | Losses {stats.losses} | "
+            f"Win rate {win_rate}%"
+        )
     ]
     for example in examples:
-        lines.append(f"Example P&L (starting ${example.starting_balance}):")
-        lines.append(f"Net: {_signed_money(example.net_profit)}")
-        lines.append("")
-    lines.extend(
-        [
-            "Thanks for a solid week. ✅",
-            "",
-            "weekly recaps show the bigger picture.",
-            "",
-            _promo_block(audience),
-        ]
-    )
-    return "\n".join(lines)
+        lines.append(
+            f"Example P&L (start ${example.starting_balance})\n"
+            f"Net {_signed_money(example.net_profit)}"
+        )
+    lines.append(_trade_promo_message())
+    return lines
 
 
 def build_session_recap_message(
     session_name: str, stats: RecapStats, audience: str = AUDIENCE_CHANNEL
-) -> str:
+) -> list[str]:
     win_rate = _win_rate(stats)
     label = "Morning" if session_name == "morning" else "Evening"
-    return (
-        f"🕒 {label} session recap\n\n"
-        f"Signals: {stats.total}\n"
-        f"Wins: {stats.wins} ✅\n"
-        f"Losses: {stats.losses} ❌\n"
-        f"Win rate: {win_rate}%\n\n"
-        "session recaps help you stay disciplined.\n\n"
-        f"{_promo_block(audience)}"
+    summary = (
+        f"{label} session recap\n"
+        f"Signals {stats.total} | Wins {stats.wins} | "
+        f"Losses {stats.losses} | Win rate {win_rate}%"
     )
+    return [summary, _trade_promo_message()]
 
 
-CONVERSION_SOFT = (
-    "👋 Thinking about VIP?\n\n"
-    "VIP members get earlier entries, full details, and priority support.\n\n"
-    "speed + detail = better execution.\n\n"
-    f"{_promo_block(AUDIENCE_CHANNEL)}"
-)
-
-CONVERSION_TRIAL = (
-    "🧪 Want to try VIP first?\n\n"
-    "Grab a 24h trial for $10 and see the difference.\n\n"
-    "the trial shows you the speed and details.\n\n"
-    f"{_promo_block(AUDIENCE_CHANNEL)}"
-)
-
-CONVERSION_SCARCITY = (
-    "⚠️ VIP spots are limited.\n\n"
-    "We keep the group small so entries stay fast and support stays responsive.\n\n"
-    "smaller groups keep entries clean.\n\n"
-    f"{_promo_block(AUDIENCE_CHANNEL)}"
-)
-
-
-INTRO_LINES = [
-    "Optitrade Signals — clear setups, clear expiry, and transparent results.",
-    "APEX signals: simple entries, consistent rules, and honest recaps.",
-    "We focus on quality setups and clean execution, not noise.",
-    "Trade smart: one setup at a time, same rules every session.",
+CONVERSION_SOFT = [
+    "VIP gives early entries, full details, priority support.\n"
+    'Reply "VIP" or "TRIAL" to join.',
+    _trade_promo_message(),
 ]
 
-MOTIVATION_LINES = [
-    "Discipline beats hype. Stick to the plan and let the edge play out.",
-    "Protect capital first. The wins follow the process.",
-    "One trade doesn’t define the day — consistency does.",
-    "Patience pays. Wait for your window and execute cleanly.",
+CONVERSION_TRIAL = [
+    "VIP trial: 24h for $10.\n"
+    'Reply "VIP" or "TRIAL" to start.',
+    _trade_promo_message(),
 ]
 
-PROMO_LINES = [
-    'VIP gets earlier entries and full details. Reply "VIP" to upgrade.',
-    'Want the earliest alerts? Message "VIP" or "TRIAL".',
-    "VIP members see entries first and get priority support.",
-    "Upgrade to VIP for early entries and fewer delays.",
+CONVERSION_SCARCITY = [
+    "VIP spots are limited to keep entries fast.\n"
+    'Reply "VIP" or "TRIAL" to join.',
+    _trade_promo_message(),
 ]
+
 
 CHANNEL_PROMO_LINES = [
-    "VIP gets the earliest entries and the full breakdown on every setup.",
-    "If you want full context and earlier entries, VIP is where it's sent.",
-    "Serious about execution? VIP members get the first alerts and full details.",
-    "VIP delivers the earliest entries plus the full market context.",
+    "VIP delivers the earliest entries.\nFull context included.",
+    "VIP sends entries first.\nFull details included.",
+    "VIP: earliest alerts.\nFull breakdown included.",
+    "VIP gives priority access.\nAll setups included.",
 ]
 
 CHANNEL_PROMO_CTA = [
-    'To join VIP or start a trial, message "VIP" or "TRIAL".',
-    'Interested in VIP access? Message "VIP" or "TRIAL".',
-    'Want VIP access? Message "VIP" or "TRIAL".',
+    'Reply "VIP" or "TRIAL" for access.',
+    'Message "VIP" or "TRIAL" to join.',
+    'Want in? Reply "VIP" or "TRIAL".',
 ]
 
-CHANNEL_PROMO_HEADERS = [
-    "VIP update",
-    "VIP access",
-    "VIP note",
-]
-
-VIP_PROMO_HEADERS = [
-    "Reminder",
-    "Desk note",
-    "Heads-up",
+VIP_REMINDER_LINES = [
+    "Reminder: enter only within the window.\nLate entries reduce accuracy.",
+    "Reminder: match expiry and direction exactly.\nDouble-check before entry.",
+    "Reminder: skip late entries and wait for the next setup.\nProtect timing.",
 ]
 
 
-def build_follow_instructions_message(audience: str = AUDIENCE_CHANNEL) -> str:
-    lines = [
-        "✅ How to follow signals correctly:",
-        "1. Register here: https://optitrade.site/?ref=APEX",
-        "2. Deposit minimum $50",
-        "3. Use the same expiry & entry",
-        "",
-        "⚠️ Signals only work properly on our platform.",
-        "",
-        "matching the platform keeps entries consistent.",
-        "",
-        _promo_block(audience),
-    ]
-    return "\n".join(lines)
-
-
-def build_vip_welcome_message() -> str:
-    return (
-        "👑 Welcome to VIP!\n\n"
-        "You'll get early entries, full details, and priority support. 🚀\n\n"
-        "the edge is speed + clean execution.\n\n"
-        f"{_promo_block(AUDIENCE_VIP)}"
+def build_follow_instructions_message(audience: str = AUDIENCE_CHANNEL) -> list[str]:
+    steps = (
+        "Follow steps:\n"
+        "1) Register on Optitrade\n"
+        "2) Deposit $50+\n"
+        "3) Match expiry and window"
     )
+    note = "Signals are optimized for our platform."
+    return [steps, note, _trade_promo_message()]
 
 
-def build_vip_rules_message() -> str:
-    lines = [
-        "📌 VIP rules to get the best results:",
-        "1. Only take signals inside the entry window.",
-        "2. Use the exact expiry & direction we send.",
-        "3. Skip late entries — wait for the next setup.",
-        "4. Keep risk per trade consistent.",
-        "",
-        "consistency protects the edge.",
-        "",
-        _promo_block(AUDIENCE_VIP),
+def build_vip_welcome_message() -> list[str]:
+    return [
+        "Welcome to VIP. Early entries, full details, priority support.",
+        _trade_promo_message(),
     ]
-    return "\n".join(lines)
 
 
-def build_vip_follow_message() -> str:
-    lines = [
-        "🧭 How to follow VIP signals:",
-        "1. Trade on the official platform.",
-        "2. Match expiry, entry window, and direction exactly.",
-        "3. Copy the code we send and paste it on the website.",
-        "",
-        "the code links the signal to the correct entry.",
-        "",
-        _promo_block(AUDIENCE_VIP),
-    ]
-    return "\n".join(lines)
+def build_vip_rules_message() -> list[str]:
+    rules = (
+        "VIP rules:\n"
+        "1) Enter only in the window\n"
+        "2) Match expiry and direction\n"
+        "3) Skip late entries\n"
+        "4) Keep risk consistent"
+    )
+    return [rules, _trade_promo_message()]
 
 
-def build_channel_promo_message(seed: str) -> str:
+def build_vip_follow_message() -> list[str]:
+    steps = (
+        "Follow VIP:\n"
+        "1) Trade on Optitrade\n"
+        "2) Match expiry, window, direction\n"
+        "3) Paste the code"
+    )
+    return [steps, _trade_promo_message()]
+
+
+def build_channel_promo_message(seed: str) -> list[str]:
     intro = _pick_line(CHANNEL_PROMO_LINES, seed)
     cta = _pick_line(CHANNEL_PROMO_CTA, seed + ":cta")
-    lines = [
-        _pick_line(CHANNEL_PROMO_HEADERS, seed + ":header"),
-        "",
-        f"{intro} 🔔",
-        "",
-        cta,
-        "",
-        f"Official platform: {WEBSITE_URL} 🌐",
-    ]
-    return "\n".join(lines)
+    return [f"{intro}\n{cta}", _trade_promo_message()]
 
 
-def build_vip_promo_message(seed: str) -> str:
-    motivation = _pick_line(MOTIVATION_LINES, seed + ":motivation")
-    lines = [
-        _pick_line(VIP_PROMO_HEADERS, seed + ":header"),
-        "",
-        f"{motivation} 🔥",
-        "",
-        f"Official platform: {WEBSITE_URL} 🌐",
-    ]
-    return "\n".join(lines)
+def build_vip_promo_message(seed: str) -> list[str]:
+    reminder = _pick_line(VIP_REMINDER_LINES, seed)
+    return [reminder, _trade_promo_message()]
 
 
 @dataclass(frozen=True)
