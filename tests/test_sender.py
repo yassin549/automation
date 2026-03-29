@@ -1,8 +1,8 @@
+import asyncio
 import logging
 from datetime import date, datetime, time
 from pathlib import Path
 
-import pytest
 from zoneinfo import ZoneInfo
 
 from ghost.config import AppConfig
@@ -36,10 +36,7 @@ def _config(tmp_path: Path) -> AppConfig:
     )
 
 
-@pytest.mark.asyncio
-async def test_send_once_does_not_mark_executed_when_send_fails(
-    tmp_path, monkeypatch
-) -> None:
+def test_send_once_does_not_mark_executed_when_send_fails(tmp_path, monkeypatch) -> None:
     async def fake_try_send_message(*args, **kwargs):
         return None
 
@@ -48,23 +45,24 @@ async def test_send_once_does_not_mark_executed_when_send_fails(
     state = BotState(day="2026-03-29", week="2026-W13")
     config = _config(tmp_path)
 
-    sent = await _send_once(
-        client=object(),
-        config=config,
-        state=state,
-        logger=logging.getLogger("test"),
-        action_id="test-action",
-        target="@channel",
-        message="hello",
-        label="test",
+    sent = asyncio.run(
+        _send_once(
+            client=object(),
+            config=config,
+            state=state,
+            logger=logging.getLogger("test"),
+            action_id="test-action",
+            target="@channel",
+            message="hello",
+            label="test",
+        )
     )
 
     assert sent is False
     assert state.was_executed("test-action") is False
 
 
-@pytest.mark.asyncio
-async def test_post_pre_session_sends_immediately_when_inside_pre_window(
+def test_post_pre_session_sends_immediately_when_inside_pre_window(
     tmp_path, monkeypatch
 ) -> None:
     tz = ZoneInfo("Africa/Tunis")
@@ -117,14 +115,16 @@ async def test_post_pre_session_sends_immediately_when_inside_pre_window(
     monkeypatch.setattr("ghost.sender._send_trade_promo", fake_send_trade_promo)
     monkeypatch.setattr("ghost.sender._sleep_range", fake_sleep_range)
 
-    await _post_pre_session(
-        client=object(),
-        config=_config(tmp_path),
-        context=context,
-        state=BotState(day="2026-03-29", week="2026-W13"),
-        logger=logging.getLogger("test"),
-        tz=tz,
-        vip_target="@vip",
+    asyncio.run(
+        _post_pre_session(
+            client=object(),
+            config=_config(tmp_path),
+            context=context,
+            state=BotState(day="2026-03-29", week="2026-W13"),
+            logger=logging.getLogger("test"),
+            tz=tz,
+            vip_target="@vip",
+        )
     )
 
     assert wait_called is False
