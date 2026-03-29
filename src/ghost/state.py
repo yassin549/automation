@@ -35,6 +35,9 @@ class BotState:
     vip_daily: Stats = field(default_factory=Stats)
     vip_weekly: Stats = field(default_factory=Stats)
     vip_session_stats: dict[str, Stats] = field(default_factory=dict)
+    session_win_streak: dict[str, int] = field(default_factory=dict)
+    session_best_win_streak: dict[str, int] = field(default_factory=dict)
+    session_best_loss_streak: dict[str, int] = field(default_factory=dict)
     channel_win_streak: int = 0
     win_streak: int = 0
     vip_push_posted_for_streak: bool = False
@@ -73,6 +76,27 @@ class BotState:
     def set_signal_code(self, signal_id: str, code: str) -> None:
         self.signal_codes[signal_id] = code
 
+    def update_session_win_streak(self, session_name: str, result: str) -> int:
+        streak = self.session_win_streak.get(session_name, 0)
+        loss_streak = self.session_loss_streak.get(session_name, 0)
+        if result.upper() == "WIN":
+            streak += 1
+            loss_streak = 0
+            self.session_best_win_streak[session_name] = max(
+                self.session_best_win_streak.get(session_name, 0),
+                streak,
+            )
+        else:
+            streak = 0
+            loss_streak += 1
+            self.session_best_loss_streak[session_name] = max(
+                self.session_best_loss_streak.get(session_name, 0),
+                loss_streak,
+            )
+        self.session_win_streak[session_name] = streak
+        self.session_loss_streak[session_name] = loss_streak
+        return streak
+
 
 def load_state(path: Path, today: str, week_id: str) -> BotState:
     if not path.exists():
@@ -95,6 +119,18 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         vip_daily=_load_stats(data.get("vip_daily")),
         vip_weekly=_load_stats(data.get("vip_weekly")),
         vip_session_stats=_load_session_stats(data.get("vip_session_stats")),
+        session_win_streak={
+            str(key): int(value)
+            for key, value in (data.get("session_win_streak") or {}).items()
+        },
+        session_best_win_streak={
+            str(key): int(value)
+            for key, value in (data.get("session_best_win_streak") or {}).items()
+        },
+        session_best_loss_streak={
+            str(key): int(value)
+            for key, value in (data.get("session_best_loss_streak") or {}).items()
+        },
         channel_win_streak=int(data.get("channel_win_streak", 0)),
         win_streak=int(data.get("win_streak", 0)),
         vip_push_posted_for_streak=bool(data.get("vip_push_posted_for_streak", False)),
@@ -135,10 +171,13 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         state.vip_push_posted_for_streak = False
         state.conversion_posted = False
         state.session_loss_streak.clear()
+        state.session_best_loss_streak.clear()
         state.session_stopped.clear()
         state.signal_sent_at.clear()
         state.signal_codes.clear()
         state.session_stats.clear()
+        state.session_win_streak.clear()
+        state.session_best_win_streak.clear()
         state.channel_daily = Stats()
         state.channel_win_streak = 0
         state.channel_session_stats.clear()
@@ -163,6 +202,9 @@ def save_state(path: Path, state: BotState) -> None:
         "vip_daily": _dump_stats(state.vip_daily),
         "vip_weekly": _dump_stats(state.vip_weekly),
         "vip_session_stats": _dump_session_stats(state.vip_session_stats),
+        "session_win_streak": state.session_win_streak,
+        "session_best_win_streak": state.session_best_win_streak,
+        "session_best_loss_streak": state.session_best_loss_streak,
         "channel_win_streak": state.channel_win_streak,
         "win_streak": state.win_streak,
         "vip_push_posted_for_streak": state.vip_push_posted_for_streak,

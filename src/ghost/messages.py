@@ -11,6 +11,8 @@ class RecapStats:
     total: int
     wins: int
     losses: int
+    best_win_streak: int = 0
+    best_loss_streak: int = 0
 
 
 AUDIENCE_CHANNEL = "channel"
@@ -46,20 +48,25 @@ CODE_VALUE = "{code}"
 RESULT_MESSAGE = "{result_emoji} {WIN_OR_LOSS}"
 
 SESSION_RECAP_CHANNEL = (
-    "📊 Session recap:\n"
+    "📊 {session_label} recap:\n"
     "\n"
     "Signals: {total}  \n"
     "Wins: {wins}  \n"
     "Losses: {losses}  \n"
-    "Win rate: {winrate}%"
+    "Win rate: {winrate}%  \n"
+    "Best win streak: {best_win_streak}  \n"
+    "Worst loss streak: {best_loss_streak}"
 )
 
 SESSION_RECAP_VIP = (
-    "📊 Session recap:\n"
+    "📊 {session_label} recap:\n"
     "\n"
     "{total} trades  \n"
     "{wins} wins  \n"
-    "{losses} losses"
+    "{losses} losses  \n"
+    "{winrate}% win rate  \n"
+    "Best run: {best_win_streak} wins  \n"
+    "Worst run: {best_loss_streak} losses"
 )
 
 DAILY_RECAP = (
@@ -126,12 +133,12 @@ CONVERSION_SCARCITY_OPTIONS = (
     "Join VIP to get 10 signals every day.",
 )
 
-FINAL_PUSH = (
-    "🔥 2 wins back-to-back\n"
+WIN_STREAK_PUSH = (
+    "🔥 {streak} wins back-to-back\n"
     "\n"
-    "VIP got in earlier on both.\n"
+    "💎 VIP got in earlier on every one.\n"
     "\n"
-    "Free signals come later for a reason."
+    "⏳ Free signals come later for a reason."
 )
 
 
@@ -179,20 +186,27 @@ def build_result_message(result: str) -> str:
     return RESULT_MESSAGE.format(result_emoji=emoji, WIN_OR_LOSS=outcome)
 
 
-def build_session_recap_channel(stats: RecapStats) -> str:
+def build_session_recap_channel(session_name: str, stats: RecapStats) -> str:
     return SESSION_RECAP_CHANNEL.format(
+        session_label=_session_label(session_name),
         total=stats.total,
         wins=stats.wins,
         losses=stats.losses,
         winrate=_win_rate(stats),
+        best_win_streak=stats.best_win_streak,
+        best_loss_streak=stats.best_loss_streak,
     )
 
 
-def build_session_recap_vip(stats: RecapStats) -> str:
+def build_session_recap_vip(session_name: str, stats: RecapStats) -> str:
     return SESSION_RECAP_VIP.format(
+        session_label=_session_label(session_name),
         total=stats.total,
         wins=stats.wins,
         losses=stats.losses,
+        winrate=_win_rate(stats),
+        best_win_streak=stats.best_win_streak,
+        best_loss_streak=stats.best_loss_streak,
     )
 
 
@@ -240,11 +254,15 @@ def conversion_scarcity_count() -> int:
     return len(CONVERSION_SCARCITY_OPTIONS)
 
 
-def build_final_push() -> str:
-    return FINAL_PUSH
+def build_win_streak_push(streak: int) -> str:
+    return WIN_STREAK_PUSH.format(streak=streak)
 
 
 def _win_rate(stats: RecapStats) -> int:
     if stats.total <= 0:
         return 0
     return round(stats.wins / stats.total * 100)
+
+
+def _session_label(session_name: str) -> str:
+    return session_name.replace("_", " ").title()

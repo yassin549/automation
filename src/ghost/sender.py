@@ -25,7 +25,6 @@ from .messages import (
     build_daily_recap,
     build_code_intro,
     build_code_value,
-    build_final_push,
     build_pre_session_base,
     build_pre_session_extra,
     build_result_message,
@@ -34,6 +33,7 @@ from .messages import (
     build_weekly_recap,
     build_signal_details,
     build_trade_promo_message,
+    build_win_streak_push,
 )
 from .plan import (
     DayPlan,
@@ -113,7 +113,7 @@ async def run_sender(
         await _ensure_authorized(client, config, logger)
 
         vip_target = None
-        if config.vip_channel and mode in {"day", "morning", "evening", "all"}:
+        if config.vip_channel and mode in {"day", "morning", "evening", "all", "recap"}:
             vip_target = await _resolve_vip_target(client, config.vip_channel, logger)
 
         if mode in {"day", "all"}:
@@ -148,7 +148,7 @@ async def run_sender(
         elif mode in {"morning", "evening"}:
             await _run_mode_once(client, config, logger, tz, vip_target, mode)
         elif mode == "recap":
-            logger.info("Recap mode is disabled in the current posting structure.")
+            await _run_recap(client, config, logger, tz, vip_target)
             return
         else:
             raise RuntimeError(f"Unknown mode: {mode}")
@@ -254,6 +254,27 @@ async def _run_mode_once(
     await _run_session(client, config, context, state, logger, tz, vip_target)
 
 
+async def _run_recap(
+    client: TelegramClient,
+    config: AppConfig,
+    logger: logging.Logger,
+    tz: ZoneInfo,
+    vip_target: object | None,
+) -> None:
+    now = datetime.now(tz)
+    today = now.date()
+    week_id = _week_id(today)
+    state = load_state(config.state_path, today.isoformat(), week_id)
+
+    await _post_conversion_messages(client, config, state, logger, tz, wait=False)
+    await _post_daily_recap(
+        client, config, state, logger, tz, vip_target, wait=False
+    )
+    await _post_weekly_recap(
+        client, config, state, logger, tz, vip_target, wait=False
+    )
+
+
 def _build_session_context(
     plan: DayPlan, tz: ZoneInfo, today: date, session_name: str
 ) -> SessionContext:
@@ -324,7 +345,6 @@ async def _run_session(
         )
 
     await _post_session_recap(client, config, state, logger, context.name, vip_target)
-    await _post_final_push(client, config, state, logger, context.name)
 
 
 async def _post_pre_session(
@@ -337,11 +357,22 @@ async def _post_pre_session(
     vip_target: object | None,
 ) -> None:
     pre_time = context.start_at - FLOW.pre_session_lead
-    if _is_too_late(pre_time, config.max_late_seconds, tz):
-        logger.warning("Skipping late pre-session post for %s.", context.name)
+    now = datetime.now(tz)
+    if now >= context.start_at:
+        logger.warning(
+            "Skipping pre-session post for %s because the session already started.",
+            context.name,
+        )
         return
 
-    await _wait_until(pre_time, tz)
+    if now < pre_time:
+        await _wait_until(pre_time, tz)
+    else:
+        logger.info(
+            "Posting pre-session heads-up for %s immediately; session starts at %s.",
+            context.name,
+            context.start_at,
+        )
 
     base_sent = False
     base_sent |= await _send_pre_session_base(
@@ -596,7 +627,20 @@ async def _post_result_and_proof(
         )
 
         state.mark_executed(result_id)
-        _update_stats_after_result(state, context.session.name, context.signal.result)
+        session_win_streak = _update_stats_after_result(
+            state,
+            context.session.name,
+            context.signal.result,
+        )
+        if session_win_streak >= 2:
+            await _post_session_win_streak_push(
+                client,
+                config,
+                state,
+                logger,
+                context.session.name,
+                session_win_streak,
+            )
         save_state(config.state_path, state)
 
     proof_id = f"{signal_key}:proof"
@@ -643,19 +687,25 @@ async def _post_session_recap(
     if not stats or stats.total <= 0:
         return
 
-    recap = RecapStats(total=stats.total, wins=stats.wins, losses=stats.losses)
+    recap = RecapStats(
+        total=stats.total,
+        wins=stats.wins,
+        losses=stats.losses,
+        best_win_streak=state.session_best_win_streak.get(session_name, 0),
+        best_loss_streak=state.session_best_loss_streak.get(session_name, 0),
+    )
     if vip_target is not None:
         await _try_send_message(
             client,
             vip_target,
-            build_session_recap_vip(recap),
+            build_session_recap_vip(session_name, recap),
             logger,
             "vip session recap",
         )
     await _try_send_message(
         client,
         config.channel,
-        build_session_recap_channel(recap),
+        build_session_recap_channel(session_name, recap),
         logger,
         "channel session recap",
     )
@@ -664,23 +714,28 @@ async def _post_session_recap(
     save_state(config.state_path, state)
 
 
-async def _post_final_push(
+async def _post_session_win_streak_push(
     client: TelegramClient,
     config: AppConfig,
     state: BotState,
     logger: logging.Logger,
     session_name: str,
+    streak: int,
 ) -> None:
-    action_id = _action_id(date.fromisoformat(state.day), session_name, "final-push")
+    action_id = _action_id(
+        date.fromisoformat(state.day),
+        session_name,
+        f"win-streak-push:{streak}",
+    )
     if state.was_executed(action_id):
         return
 
     await _try_send_message(
         client,
         config.channel,
-        build_final_push(),
+        build_win_streak_push(streak),
         logger,
-        "final push",
+        "session win streak push",
     )
     state.mark_executed(action_id)
     save_state(config.state_path, state)
@@ -692,12 +747,15 @@ async def _post_conversion_messages(
     state: BotState,
     logger: logging.Logger,
     tz: ZoneInfo,
+    wait: bool = True,
 ) -> None:
     if state.conversion_posted:
         return
     day = date.fromisoformat(state.day)
     conversion_at = datetime.combine(day, config.conversion_time, tzinfo=tz)
     if datetime.now(tz) < conversion_at:
+        if not wait:
+            return
         await _wait_until(conversion_at, tz)
     if state.conversion_posted:
         return
@@ -738,6 +796,7 @@ async def _post_daily_recap(
     logger: logging.Logger,
     tz: ZoneInfo,
     vip_target: object | None,
+    wait: bool = True,
 ) -> None:
     action_id = _action_id(date.fromisoformat(state.day), "daily", "recap")
     if state.was_executed(action_id):
@@ -745,6 +804,8 @@ async def _post_daily_recap(
     day = date.fromisoformat(state.day)
     recap_at = datetime.combine(day, config.daily_recap_time, tzinfo=tz)
     if datetime.now(tz) < recap_at:
+        if not wait:
+            return
         await _wait_until(recap_at, tz)
 
     morning = _recap_stats_from(state.session_stats.get("morning"))
@@ -779,6 +840,7 @@ async def _post_weekly_recap(
     logger: logging.Logger,
     tz: ZoneInfo,
     vip_target: object | None,
+    wait: bool = True,
 ) -> None:
     day = date.fromisoformat(state.day)
     if not _is_week_end(day):
@@ -788,6 +850,8 @@ async def _post_weekly_recap(
         return
     recap_at = datetime.combine(day, config.weekly_recap_time, tzinfo=tz)
     if datetime.now(tz) < recap_at:
+        if not wait:
+            return
         await _wait_until(recap_at, tz)
 
     weekly_stats = _recap_stats_from(state.weekly)
@@ -937,10 +1001,11 @@ def _update_stats_after_result(
     state: BotState,
     session_name: str,
     result: str,
-) -> None:
+) -> int:
     state.daily.record(result)
     state.weekly.record(result)
     state.session_stats.setdefault(session_name, Stats()).record(result)
+    return state.update_session_win_streak(session_name, result)
 
 
 def _recap_stats_from(stats: Stats | None) -> RecapStats:
@@ -1047,7 +1112,9 @@ async def _send_once(
 ) -> bool:
     if state.was_executed(action_id):
         return False
-    await _try_send_message(client, target, message, logger, label)
+    sent = await _try_send_message(client, target, message, logger, label)
+    if sent is None:
+        return False
     state.mark_executed(action_id)
     save_state(config.state_path, state)
     return True
@@ -1064,7 +1131,9 @@ async def _send_step(
 ) -> None:
     if state.was_executed(action_id):
         return
-    await _try_send_message(client, target, message, logger, action_id)
+    sent = await _try_send_message(client, target, message, logger, action_id)
+    if sent is None:
+        return
     state.mark_executed(action_id)
     save_state(config.state_path, state)
 

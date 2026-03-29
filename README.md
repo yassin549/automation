@@ -1,6 +1,6 @@
 ﻿# Ghost Signal Sender
 
-Telegram signal scheduler that follows the current session flow (pre-session heads-up, trade promo, VIP-first signals with codes, delayed free signals, results + proof images, session recap, final push) on the Tunisia trading windows.
+Telegram signal scheduler that follows the current session flow (pre-session heads-up, trade promo, VIP-first signals with codes, delayed free signals, results + proof images, session recap, session win-streak pushes) on the Tunisia trading windows.
 
 **Requirements**
 - Python 3.11+
@@ -106,7 +106,7 @@ python -m ghost.cli --once
 - `--result-delay 75`: seconds before posting result
 - `--free-delay 150`: seconds to delay free signals after VIP
 
-Note: Recap mode is still unused, but daily/weekly recaps and conversion timing are used in the day flow.
+Note: Recap mode is used for conversion/daily/weekly recap runs in scheduled workflows.
 
 **GitHub Actions**
 The workflow in `.github/workflows/telegram.yml` runs short jobs on a UTC schedule using `--mode`:
