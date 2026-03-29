@@ -12,6 +12,7 @@ from ghost.plan import (
 
 from ghost.messages import build_win_streak_push
 from ghost.messages import RecapStats, build_session_recap_channel
+from ghost.messages import build_conversion_soft, build_conversion_trial
 
 
 def _sample_signal(result: str = "WIN") -> SignalPlan:
@@ -66,3 +67,15 @@ def test_build_session_recap_channel_includes_session_streaks() -> None:
     assert "Win rate: 80%" in message
     assert "Best win streak: 3" in message
     assert "Worst loss streak: 1" in message
+
+
+def test_build_conversion_messages_use_updated_copy() -> None:
+    soft = build_conversion_soft()
+    trial = build_conversion_trial()
+
+    assert "💎 VIP Access" in soft
+    assert "Full trade reasoning" in soft
+    assert 'Reply "VIP" to join or "TRIAL" to test it for 24h.' in soft
+    assert "🧪 24H VIP Trial" in trial
+    assert "Price: $10" in trial
+    assert 'Reply "TRIAL" to activate it.' in trial

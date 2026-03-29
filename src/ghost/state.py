@@ -43,6 +43,7 @@ class BotState:
     vip_push_posted_for_streak: bool = False
     conversion_posted: bool = False
     conversion_scarcity_index: int = 0
+    last_conversion_variant: str | None = None
     session_loss_streak: dict[str, int] = field(default_factory=dict)
     session_stopped: dict[str, bool] = field(default_factory=dict)
     signal_sent_at: dict[str, str] = field(default_factory=dict)
@@ -136,6 +137,11 @@ def load_state(path: Path, today: str, week_id: str) -> BotState:
         vip_push_posted_for_streak=bool(data.get("vip_push_posted_for_streak", False)),
         conversion_posted=bool(data.get("conversion_posted", False)),
         conversion_scarcity_index=int(data.get("conversion_scarcity_index", 0)),
+        last_conversion_variant=(
+            str(data["last_conversion_variant"])
+            if data.get("last_conversion_variant") is not None
+            else None
+        ),
         session_loss_streak={
             str(key): int(value)
             for key, value in (data.get("session_loss_streak") or {}).items()
@@ -210,6 +216,7 @@ def save_state(path: Path, state: BotState) -> None:
         "vip_push_posted_for_streak": state.vip_push_posted_for_streak,
         "conversion_posted": state.conversion_posted,
         "conversion_scarcity_index": state.conversion_scarcity_index,
+        "last_conversion_variant": state.last_conversion_variant,
         "session_loss_streak": state.session_loss_streak,
         "session_stopped": state.session_stopped,
         "signal_sent_at": state.signal_sent_at,

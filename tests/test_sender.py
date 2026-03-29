@@ -6,7 +6,13 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from ghost.config import AppConfig
-from ghost.sender import SessionContext, _post_pre_session, _send_once
+from ghost.sender import (
+    SessionContext,
+    _next_conversion_message,
+    _post_conversion_messages,
+    _post_pre_session,
+    _send_once,
+)
 from ghost.state import BotState
 
 
@@ -131,3 +137,58 @@ def test_post_pre_session_sends_immediately_when_inside_pre_window(
     assert base_called is True
     assert extra_called is True
     assert promo_called is True
+
+
+def test_next_conversion_message_rotates_away_from_last_variant() -> None:
+    state = BotState(day="2026-03-29", week="2026-W13", last_conversion_variant="soft")
+
+    label, message = _next_conversion_message(state)
+
+    assert label == "trial"
+    assert "24H VIP Trial" in message
+
+
+def test_next_conversion_message_advances_scarcity_index() -> None:
+    state = BotState(
+        day="2026-03-29",
+        week="2026-W13",
+        last_conversion_variant="trial",
+        conversion_scarcity_index=1,
+    )
+
+    label, message = _next_conversion_message(state)
+
+    assert label == "scarcity"
+    assert message
+    assert state.conversion_scarcity_index == 2
+
+
+def test_post_conversion_messages_sends_one_message_and_updates_last_variant(
+    tmp_path, monkeypatch
+) -> None:
+    sent_messages: list[tuple[object, str, str]] = []
+
+    async def fake_try_send_message(client, channel, message, logger, label):
+        sent_messages.append((channel, message, label))
+        return object()
+
+    monkeypatch.setattr("ghost.sender._try_send_message", fake_try_send_message)
+
+    state = BotState(day="2026-03-29", week="2026-W13", last_conversion_variant="soft")
+    config = _config(tmp_path)
+
+    asyncio.run(
+        _post_conversion_messages(
+            client=object(),
+            config=config,
+            state=state,
+            logger=logging.getLogger("test"),
+            tz=ZoneInfo("Africa/Tunis"),
+            wait=False,
+        )
+    )
+
+    assert len(sent_messages) == 1
+    assert sent_messages[0][2] == "conversion trial"
+    assert state.last_conversion_variant == "trial"
+    assert state.conversion_posted is True

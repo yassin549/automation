@@ -760,31 +760,18 @@ async def _post_conversion_messages(
     if state.conversion_posted:
         return
 
-    await _try_send_message(
+    label, message = _next_conversion_message(state)
+    sent = await _try_send_message(
         client,
         config.channel,
-        build_conversion_soft(),
+        message,
         logger,
-        "conversion soft",
+        f"conversion {label}",
     )
-    await _try_send_message(
-        client,
-        config.channel,
-        build_conversion_trial(),
-        logger,
-        "conversion trial",
-    )
-    await _try_send_message(
-        client,
-        config.channel,
-        build_conversion_scarcity(state.conversion_scarcity_index),
-        logger,
-        "conversion scarcity",
-    )
-    state.conversion_scarcity_index = (
-        state.conversion_scarcity_index + 1
-    ) % max(1, conversion_scarcity_count())
+    if sent is None:
+        return
 
+    state.last_conversion_variant = label
     state.conversion_posted = True
     save_state(config.state_path, state)
 
@@ -1022,6 +1009,27 @@ def _format_signed_dollars(value: str) -> str:
     sign = "+" if number >= 0 else "-"
     amount = _format_money(abs(number))
     return f"{sign}${amount}"
+
+
+def _next_conversion_message(state: BotState) -> tuple[str, str]:
+    variants = ("soft", "trial", "scarcity")
+    last_variant = state.last_conversion_variant
+    if last_variant in variants:
+        next_index = (variants.index(last_variant) + 1) % len(variants)
+    else:
+        next_index = 0
+
+    variant = variants[next_index]
+    if variant == "soft":
+        return variant, build_conversion_soft()
+    if variant == "trial":
+        return variant, build_conversion_trial()
+
+    message = build_conversion_scarcity(state.conversion_scarcity_index)
+    state.conversion_scarcity_index = (
+        state.conversion_scarcity_index + 1
+    ) % max(1, conversion_scarcity_count())
+    return variant, message
 
 
 def _is_week_end(day: date) -> bool:

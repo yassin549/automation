@@ -106,25 +106,25 @@ WEEKLY_RECAP = (
 )
 
 CONVERSION_SOFT = (
-    "🟢 Soft\n"
+    "💎 VIP Access\n"
     "\n"
-    "VIP gives you:\n"
+    "VIP members get:\n"
     "\n"
     "• Earlier entries  \n"
-    "• Full reasoning  \n"
-    "• Priority help  \n"
+    "• Full trade reasoning  \n"
+    "• Priority support  \n"
     "\n"
-    "Message \"VIP\" or \"TRIAL\" if you want in."
+    "Reply \"VIP\" to join or \"TRIAL\" to test it for 24h."
 )
 
 CONVERSION_TRIAL = (
-    "🧪 Trial\n"
+    "🧪 24H VIP Trial\n"
     "\n"
-    "Try VIP for 24h\n"
+    "Get full VIP access for 24 hours.\n"
     "\n"
-    "Access: $10\n"
+    "Price: $10\n"
     "\n"
-    "Reply \"TRIAL\" to start."
+    "Reply \"TRIAL\" to activate it."
 )
 
 CONVERSION_SCARCITY_OPTIONS = (
